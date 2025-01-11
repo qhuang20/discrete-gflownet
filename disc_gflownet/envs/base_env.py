@@ -8,6 +8,7 @@ class BaseEnv:
         
         self.n_dims = args.n_dims
         self.n_steps = args.n_steps
+        self.enable_time = args.enable_time
         
         # self.encoding_dim
         # self.action_dim
@@ -44,8 +45,9 @@ class BaseEnv:
         return self.state_to_encoding(s)
 
     def reset(self):
-        self._state = np.int32([0] * self.n_dims) # coord origin
+        spatial_state = np.int32([0] * self.n_dims) # coord origin
         self._step = 0
+        self._state = (0, spatial_state) if self.enable_time else spatial_state
         return self.obs()
     
     def get_forward_mask(self, state):
@@ -63,5 +65,5 @@ class BaseEnv:
             mask = mask_func(state)
             masks.append(mask)
         return masks
-    
-    
+
+

@@ -104,7 +104,12 @@ class BaseAgent:
             ep_rewards = batch_rs[i].cpu().data.numpy().tolist() # Store all rewards along the trajectory
             # Convert agent's tensor (to encoding) to environment's state using env's function 
             encoding = batch_ss[i][-1].cpu().data.numpy()
-            env_state = tuple(self.encoding_to_state(encoding))
+            env_state = self.encoding_to_state(encoding)
+            # If time enabled in env, extract spatial state from (time, spatial_state) tuple
+            if self.env.enable_time:
+                env_state = tuple(env_state[1]) # Use spatial state only for tracking
+            else:
+                env_state = tuple(env_state)
             if env_state in self.ep_last_state_counts:
                 self.ep_last_state_counts[env_state] += 1
             else:
@@ -112,7 +117,6 @@ class BaseAgent:
             self.ep_last_state_ep_rewards[env_state] = ep_rewards # Always update 
         
         return [batch_ss, batch_as, batch_steps, batch_rs]
-
 
 
     def compute_batch_loss(self, batch):
