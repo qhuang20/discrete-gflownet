@@ -20,7 +20,7 @@ class TBFlowNetAgent(BaseAgent):
         in_dim = self.tensor_dim
         out_dim = self.action_dim + self.action_dim  # forward logits + backward logits
         self.model = make_mlp([in_dim] + [args.n_hid] * args.n_layers + [out_dim]).to(self.dev)
-        self.Z = nn.Parameter(torch.zeros((1,)).to(self.dev))   
+        self.log_z = nn.Parameter(torch.zeros((1,)).to(self.dev))   
         print(self.model)
         print(self.env.print_actions() if hasattr(self.env, 'print_actions') else '') 
 
@@ -56,10 +56,10 @@ class TBFlowNetAgent(BaseAgent):
             sum_bwd_logits = torch.sum(bwd_logits)
 
             # TB loss
-            episode_loss = (self.Z + sum_fwd_logits - episode_terminal_reward.log() - sum_bwd_logits) ** 2
+            episode_loss = (self.log_z + sum_fwd_logits - episode_terminal_reward.log() - sum_bwd_logits) ** 2
             batch_loss.append(episode_loss)
                     
         avg_batch_loss = torch.cat(batch_loss).mean()
-        return [avg_batch_loss, self.Z] 
+        return [avg_batch_loss, torch.exp(self.log_z)] 
 
 

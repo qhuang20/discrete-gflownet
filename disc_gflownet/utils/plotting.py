@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.cm as cm
 
 
-def plot_loss_curve(losses_A, losses_B=None, logZs=None, title=""):
-    if logZs is not None:
+def plot_loss_curve(losses_A, losses_B=None, zs=None, title=""):
+    if zs is not None:
         fig, ax = plt.subplots(2, 1, figsize=(10, 6))
         plt.sca(ax[0])
     else:
@@ -20,9 +20,9 @@ def plot_loss_curve(losses_A, losses_B=None, logZs=None, title=""):
     plt.yscale('log')
     plt.ylabel('Loss')
     
-    if logZs is not None:
+    if zs is not None:
         plt.sca(ax[1])
-        plt.plot(np.exp(logZs), color="black")
+        plt.plot(zs, color="black")
         plt.ylabel('Estimated Z')
         plt.xlabel('Training Steps')
         plt.suptitle(title)

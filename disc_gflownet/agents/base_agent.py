@@ -148,7 +148,7 @@ class BaseAgent:
 
             # F(s) 
             log_flow = pred[..., -1]                
-            batch_Z.append(log_flow[0])
+            batch_Z.append(torch.exp(log_flow[0]))
 
             # loss
             episode_loss = torch.zeros(episode_states.shape[0] - 1).to(self.dev)

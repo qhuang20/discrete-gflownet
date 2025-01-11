@@ -41,7 +41,7 @@ class DBFlowNetAgent(BaseAgent):
         batch_ss, batch_as, episode_lens, batch_rs = batch
 
         batch_loss = []
-        batch_Z = []
+        batch_log_z = []
         for episode_idx in range(len(batch_ss)):
             episode_len = episode_lens[episode_idx]
             episode_states = batch_ss[episode_idx][:episode_len, :] 
@@ -62,7 +62,7 @@ class DBFlowNetAgent(BaseAgent):
 
             # F(s) 
             log_flow = pred[..., -1]                
-            batch_Z.append(log_flow[0])
+            batch_log_z.append(log_flow[0])
             
             # DB loss
             episode_loss = torch.zeros(episode_states.shape[0] - 1).to(self.dev)
@@ -82,7 +82,8 @@ class DBFlowNetAgent(BaseAgent):
             batch_loss.append(episode_loss ** 2)
 
         avg_batch_loss = torch.cat(batch_loss).mean()
-        avg_batch_Z = torch.tensor(batch_Z).mean()
-        return [avg_batch_loss, avg_batch_Z]
+        avg_batch_log_z = torch.tensor(batch_log_z).mean()
+        return [avg_batch_loss, torch.exp(avg_batch_log_z)]
+
 
 
