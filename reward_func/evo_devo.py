@@ -24,7 +24,7 @@ def oscillator_reward_func(weights, plot=False):
         plot: Boolean to control plotting
     
     Returns:
-        float: Reward value based on number of sharp peaks
+        float: Reward value based on number of sharp peaks that are not too damped
     """
     
     # System parameters for 3-node system
@@ -47,15 +47,25 @@ def oscillator_reward_func(weights, plot=False):
         return dxdt
     
     def calculate_reward(sol, delta=delta_osc):
-        """Calculate reward based on the number of sharp peaks in x1"""
+        """Calculate reward based on the number of sharp peaks in x1 that are not too damped"""
         x1 = sol.y[0]  # Focus only on x1
         dx1 = np.diff(x1)  # First derivative approximation
         peaks = 0
+        peak_heights = []
+        
         for j in range(1, len(dx1)):
             if dx1[j-1] > 0 and dx1[j] < 0:  # Detect a peak
                 sharpness = x1[j] - (x1[j-1] + x1[j+1]) / 2
                 if sharpness > delta_osc:  # Check if the peak is sharp
-                    peaks += 1
+                    peak_heights.append(x1[j])
+                    # For first peak, always count it
+                    if len(peak_heights) == 1:
+                        peaks += 1
+                    # For subsequent peaks, check damping ratio
+                    elif len(peak_heights) > 1:
+                        damping_ratio = peak_heights[-1] / peak_heights[-2]
+                        if damping_ratio > 0.99:  # Less than 1% damping 
+                            peaks += 1
         return peaks
 
     # Simulate system
