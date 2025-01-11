@@ -23,7 +23,6 @@ class GridEnv(BaseEnv):
         self.encoding_dim = (2 * self.grid_bound + 1) * self.n_dims if self.has_mixed_actions else (self.grid_bound + 1) * self.n_dims
         
         
-        
     
     def print_actions(self):
         print("-"*42)
@@ -80,52 +79,32 @@ class GridEnv(BaseEnv):
                 state[dim] = hot_idx
         return state
     
-    def get_forward_mask(self, state):
+    def _check_state_bounds(self, state_val):
+        """Helper method to check if a state value is within valid bounds"""
+        if self.only_negative_actions:
+            # For negative-only actions, valid range is [-grid_bound, 0]
+            return -self.grid_bound <= state_val <= 0
+        elif self.has_mixed_actions:
+            # For mixed actions, valid range is [-grid_bound, grid_bound]
+            return -self.grid_bound <= state_val <= self.grid_bound
+        else:
+            # For positive-only actions, valid range is [0, grid_bound]
+            return 0 <= state_val <= self.grid_bound
+
+    def _get_action_mask(self, state, is_forward=True):
         mask = np.zeros(self.action_dim, dtype=bool)
         for action_idx in range(self.action_dim):
             dim = action_idx // len(self.actions_per_dim)
             action_val = self.actions_per_dim[action_idx % len(self.actions_per_dim)]
             next_state = state.copy()
-            next_state[dim] += action_val
-            # Check bounds based on action type
-            if self.only_negative_actions:
-                # For negative-only actions, valid range is [-grid_bound, 0]
-                if -self.grid_bound <= next_state[dim] <= 0:
-                    mask[action_idx] = True
-            elif self.has_mixed_actions:
-                # For mixed actions, valid range is [-grid_bound, grid_bound]
-                if -self.grid_bound <= next_state[dim] <= self.grid_bound:
-                    mask[action_idx] = True
-            else:
-                # For positive-only actions, valid range is [0, grid_bound]
-                if 0 <= next_state[dim] <= self.grid_bound:
-                    mask[action_idx] = True
+            # For forward mask add the action, for backward mask subtract it
+            next_state[dim] += action_val if is_forward else -action_val
+            if self._check_state_bounds(next_state[dim]):
+                mask[action_idx] = True
         return mask
-    
-    def get_backward_mask(self, state):
-        mask = np.zeros(self.action_dim, dtype=bool)
-        for action_idx in range(self.action_dim):
-            dim = action_idx // len(self.actions_per_dim)
-            action_val = self.actions_per_dim[action_idx % len(self.actions_per_dim)]
-            prev_state = state.copy()
-            prev_state[dim] -= action_val # TODO: refactor this since logic is similar to forward mask 
-            # Check bounds based on action type
-            if self.only_negative_actions:
-                # For negative-only actions, valid range is [-grid_bound, 0]
-                if -self.grid_bound <= prev_state[dim] <= 0:
-                    mask[action_idx] = True
-            elif self.has_mixed_actions:
-                # For mixed actions, valid range is [-grid_bound, grid_bound]
-                if -self.grid_bound <= prev_state[dim] <= self.grid_bound:
-                    mask[action_idx] = True
-            else:
-                # For positive-only actions, valid range is [0, grid_bound]
-                if 0 <= prev_state[dim] <= self.grid_bound:
-                    mask[action_idx] = True
-        return mask
-    
 
 
+  
 
 
     def step(self, a):

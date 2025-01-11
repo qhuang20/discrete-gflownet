@@ -15,17 +15,17 @@ class BaseEnv:
     def print_actions(self):
         pass
     
+    def _get_action_mask(self, state, is_forward=True):
+        # mask = np.zeros(self.action_dim, dtype=bool)
+        # ...
+        # return mask
+        pass
+    
     def state_to_encoding(self, state):
         pass
 
     def encoding_to_state(self, encoding):
         pass            
-        
-    def get_forward_mask(self, state):
-        pass
-
-    def get_backward_mask(self, state):
-        pass
     
     def step(self, action_idx):
         # self._step += 1
@@ -36,10 +36,9 @@ class BaseEnv:
         # return self.obs(), reward, done
         pass
     
-
-
-
     
+  
+
     def obs(self, state=None):    
         s = self._state if state is None else state
         return self.state_to_encoding(s)
@@ -48,6 +47,12 @@ class BaseEnv:
         self._state = np.int32([0] * self.n_dims) # coord origin
         self._step = 0
         return self.obs()
+    
+    def get_forward_mask(self, state):
+        return self._get_action_mask(state, is_forward=True)
+    
+    def get_backward_mask(self, state):
+        return self._get_action_mask(state, is_forward=False)
     
     def get_masks(self, encodings, direction):
         # Handle a list of encodings with forward or backward masks
@@ -59,5 +64,4 @@ class BaseEnv:
             masks.append(mask)
         return masks
     
-
-
+    
