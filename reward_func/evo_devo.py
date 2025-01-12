@@ -95,7 +95,6 @@ def oscillator_reward_func(weights, plot=False):
 
 
 
-
 def somitogenesis_reward_func(state, plot=False):
     """
     Calculate reward based on gene expression pattern simulation.
@@ -105,13 +104,14 @@ def somitogenesis_reward_func(state, plot=False):
         plot: bool, whether to plot the heatmap (default: False)
         
     Returns:
-        float: Reward value based on pattern formation
+        float: Reward value based on pattern formation and stability
     """
     # System parameters for 3-node system
     n_cells = 100  # Number of cells/positions
     n_simtime = 60  # Total simulation time
     n_timepoints = 200 
     delta_somite = 0.1
+    delta_stable = 0.01  
     rtol = 1e-4  # Relative tolerance for ODE solver
     atol = 1e-7  # Absolute tolerance for ODE solver
     weight_scale = 10.0  # Scaling factor for weights
@@ -155,13 +155,35 @@ def somitogenesis_reward_func(state, plot=False):
         
         return t, sol.y.T.reshape(len(t), n_cells, 3)
 
-    def calculate_reward(x1_final, delta_somite=0.1):
-        """Calculate reward based on changes in x1 concentration"""
-        reward = 0
-        for i in range(len(x1_final)-1):
-            if abs(x1_final[i+1] - x1_final[i]) / max(abs(x1_final[i]), 1e-10) > delta_somite:
-                reward += 1
-        return reward
+    def calculate_reward(x1_concentration, delta_somite=delta_somite):
+        """Calculate reward based on changes in x1 concentration and stability"""
+        total_reward = 0
+        
+        # Spatial pattern reward
+        spatial_reward = 0
+        final_concentrations = x1_concentration[-1]
+        for i in range(len(final_concentrations)-1):
+            if abs(final_concentrations[i+1] - final_concentrations[i]) > delta_somite:
+                spatial_reward += 1
+        # print(f"spatial_reward: {spatial_reward}")
+        
+        # Only check stability if spatial pattern exists
+        stability_reward = 0
+        if spatial_reward > 0:
+            last_5_timesteps = x1_concentration[-5:]
+            for cell in range(n_cells):
+                cell_concentrations = last_5_timesteps[:, cell]
+                is_stable = True
+                for t in range(len(cell_concentrations)-1):
+                    if abs(cell_concentrations[t+1] - cell_concentrations[t]) > delta_stable: 
+                        is_stable = False
+                        break
+                if is_stable:
+                    stability_reward += 1
+            # print(f"stability_reward: {stability_reward}")
+        
+        total_reward = spatial_reward * (stability_reward / n_cells)  
+        return total_reward
 
     def plot_heatmap(x1_concentration, t):
         """Plot heatmap of x1 concentration across time and space"""
@@ -174,8 +196,8 @@ def somitogenesis_reward_func(state, plot=False):
         plt.title('x1 Concentration Across Time and Space')
         plt.show()
         
-        print("x1 concentration at last time step:")
-        print(x1_concentration[-1])
+        # print("x1 concentration at last time step:")
+        # print(np.array2string(x1_concentration[-1], precision=3, suppress_small=True, floatmode='fixed')) 
 
     # Run simulation
     w11, w12, w13, w21, w22, w23, w31, w32, w33 = state
@@ -185,8 +207,7 @@ def somitogenesis_reward_func(state, plot=False):
     if plot:
         plot_heatmap(x1_concentration, t)
     
-    return calculate_reward(x1_concentration[-1])
-
+    return calculate_reward(x1_concentration)
 
 
 
