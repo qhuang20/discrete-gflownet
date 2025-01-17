@@ -5,13 +5,19 @@ import time
 
 
 
+
+def coord_reward_func(state):
+    # reward1 = sum(1 for coord in state if coord == 5) + 0.001 # args.min_reward
+    reward1 = sum(5 for coord in state if coord == 6) + 0.001 
+    reward2 = sum(10 for coord in state if coord == 8) + 0.001 
+    return reward1 + reward2
+
+
+
+
 def sigmoid(z):
     """Sigmoid activation function with overflow protection"""
     return 1 / (1 + np.exp(-np.clip(z, -5000, 5000)))
-
-
-
-
 
 
 
@@ -90,7 +96,6 @@ def oscillator_reward_func(weights, plot=False):
         plt.show()
 
     return calculate_reward(sol)
-
 
 
 
@@ -208,6 +213,5 @@ def somitogenesis_reward_func(state, plot=False):
         plot_heatmap(x1_concentration, t)
     
     return calculate_reward(x1_concentration)
-
 
 

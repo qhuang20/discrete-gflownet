@@ -9,7 +9,6 @@ from ..nets.mlp import make_mlp
 from ..utils.setting import get_device, tf
 from itertools import count
 from itertools import chain
-from itertools import combinations
 
 
 
@@ -39,7 +38,7 @@ class BaseAgent:
         # Track unique state distribution and trajectory rewards
         self.encoding_to_state = self.env.encoding_to_state
         self.ep_last_state_counts = {}  # Counts occurrences of each episode last state.
-        self.ep_last_state_ep_rewards = {}  # Store the most recent trajectory rewards for ep_last_state 
+        self.ep_last_state_trajectories = {}  # Store trajectories (states, actions, rewards) for each last state
 
     def parameters(self):
         return self.model.parameters()
@@ -93,7 +92,7 @@ class BaseAgent:
 
         batch_steps = [len(batch_ss[i]) for i in range(len(batch_ss))]
 
-        # post-process
+        """post-process"""
         for i in range(len(batch_ss)):
             batch_ss[i] = torch.stack(batch_ss[i])
             batch_as[i] = torch.stack(batch_as[i])
@@ -101,22 +100,38 @@ class BaseAgent:
             assert batch_ss[i].shape[0] - batch_as[i].shape[0] == 1
         # Track unique state distribution and trajectory rewards
         for i in range(len(batch_rs)):
-            ep_rewards = batch_rs[i].cpu().data.numpy().tolist() # Store all rewards along the trajectory
-            # Convert agent's tensor (to encoding) to environment's state using env's function 
-            encoding = batch_ss[i][-1].cpu().data.numpy()
-            env_state = self.encoding_to_state(encoding)
-            # If time enabled in env, extract spatial state from (time, spatial_state) tuple
+            # Get trajectory data
+            ep_states = batch_ss[i].cpu().data.numpy()  # All states in trajectory
+            ep_actions = batch_as[i].cpu().data.numpy()  # All actions in trajectory
+            ep_rewards = batch_rs[i].cpu().data.numpy()  # All rewards in trajectory
+            
+            # Get final state
+            encoding = ep_states[-1]
+            env_state = self.encoding_to_state(encoding) 
             if self.env.enable_time:
-                env_state = tuple(env_state[1]) # Use spatial state only for tracking
+                env_state = tuple(env_state[1])  # Use spatial state only for tracking
             else:
                 env_state = tuple(env_state)
+                
+            # Update counts
             if env_state in self.ep_last_state_counts:
                 self.ep_last_state_counts[env_state] += 1
             else:
                 self.ep_last_state_counts[env_state] = 1
-            self.ep_last_state_ep_rewards[env_state] = ep_rewards # Always update 
+                self.ep_last_state_trajectories[env_state] = []
+                
+            # Store full trajectory
+            trajectory = {
+                'states': ep_states,
+                'actions': ep_actions,
+                'rewards': ep_rewards
+            }
+            self.ep_last_state_trajectories[env_state].append(trajectory)
         
         return [batch_ss, batch_as, batch_steps, batch_rs]
+
+
+
 
 
     def compute_batch_loss(self, batch):
