@@ -1,6 +1,6 @@
 import numpy as np
 from .base_env import BaseEnv
-
+from ..utils.cache import LRUCache
 
 
 class GridEnv(BaseEnv): 
@@ -21,9 +21,12 @@ class GridEnv(BaseEnv):
         # Grid bounds
         self.grid_bound = args.grid_bound
         self.enable_time = args.enable_time
+        self.consistent_signs = args.consistent_signs # New flag to enforce consistent signs per dimension
         base_encoding_dim = (2 * self.grid_bound + 1) * self.n_dims if self.has_mixed_actions else (self.grid_bound + 1) * self.n_dims
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
         
+        # Initialize reward cache
+        self.reward_cache = LRUCache(max_size=args.cache_max_size) 
     
     def print_actions(self):
         print("-"*42)
@@ -127,6 +130,20 @@ class GridEnv(BaseEnv):
             next_state = spatial_state.copy()
             # For forward mask add the action, for backward mask subtract it
             next_state[dim] += action_val if is_forward else -action_val
+            
+            # Check sign consistency when enabled
+            if self.consistent_signs and self.has_mixed_actions:
+                current_val = spatial_state[dim]
+                if current_val > 0:  # If positive, only allow positive actions
+                    if action_val <= 0:
+                        mask[action_idx] = False
+                        continue
+                elif current_val < 0:  # If negative, only allow negative actions
+                    if action_val >= 0:
+                        mask[action_idx] = False
+                        continue
+                # At zero, allow any action
+            
             if self._check_state_bounds(next_state[dim]):
                 mask[action_idx] = True
         return mask
@@ -156,8 +173,14 @@ class GridEnv(BaseEnv):
         done = (self._step == self.n_steps) or (not np.any(forward_mask))
         
         state_for_reward = self._state[1] if self.enable_time else self._state
-        reward = self.custom_reward_func(state_for_reward) + self.min_reward
+        
+        # Use cached reward if available, otherwise compute and cache it
+        state_key = tuple(state_for_reward)
+        if state_key in self.reward_cache:
+            reward = self.reward_cache[state_key]
+        else:
+            reward = self.custom_reward_func(state_for_reward) + self.min_reward
+            self.reward_cache[state_key] = reward
+            
         return self.obs(), reward, done
-
-
 
