@@ -1,10 +1,13 @@
 import numpy as np
 from .base_env import BaseEnv
+from ..utils.cache import LRUCache
 
 
 class GridEnv(BaseEnv): 
     def __init__(self, args):
         # super().__init__(args) 
+        self.n_workers = args.n_workers 
+        self.reward_cache = LRUCache(max_size=args.cache_max_size) 
         self.min_reward = args.min_reward
         self.custom_reward_func = args.custom_reward_fn
         
@@ -145,7 +148,6 @@ class GridEnv(BaseEnv):
         return mask
 
 
-  
 
 
     def step(self, a):
@@ -169,9 +171,19 @@ class GridEnv(BaseEnv):
         done = (self._step == self.n_steps) or (not np.any(forward_mask))
         
         state_for_reward = self._state[1] if self.enable_time else self._state
-        # reward = self.custom_reward_func(state_for_reward) + self.min_reward 
+
+        if self.n_workers == 1:
+            # Use cached reward if available, otherwise compute and cache it
+            state_key = tuple(state_for_reward)
+            if state_key in self.reward_cache:
+                reward = self.reward_cache[state_key]
+            else:
+                reward = self.custom_reward_func(state_for_reward) + self.min_reward
+                self.reward_cache[state_key] = reward
+        else:
+            # Return dummy reward - multiprocessing takes care of the rest
+            reward = -1
             
-        # return dummy reward - multiprocessing takes care of the rest
-        return self.obs(), -1, done
+        return self.obs(), reward, done
 
 

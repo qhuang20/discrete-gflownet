@@ -74,26 +74,29 @@ def main(args):
             # print("batch_steps:", [x for x in experiences[2]])
             # print("batch_rs shape:", [x.shape for x in experiences[3]])
 
-            # print("Start Multiprocessing !") 
-            curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
-            for mb in range(args.mbsize): 
-                curr_ns_all[mb] = experiences[0][mb].numpy()[1:]
-            curr_ns_all = curr_ns_all.reshape(args.mbsize*args.n_steps, envs[0].encoding_dim)
+            
+            if args.n_workers > 1: 
+                # print("Start Multiprocessing !") 
+                curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
+                for mb in range(args.mbsize): 
+                    curr_ns_all[mb] = experiences[0][mb].numpy()[1:]
+                curr_ns_all = curr_ns_all.reshape(args.mbsize*args.n_steps, envs[0].encoding_dim)
 
-            compute_reward_partial = partial(compute_reward, env=envs[0], reward_func=args.custom_reward_fn)
-            
-            with Pool(processes=4) as env_pool:
-                curr_r_env = list(env_pool.imap(compute_reward_partial, curr_ns_all)) 
-            curr_r_env = np.asarray(curr_r_env)
-            curr_r_env = curr_r_env.reshape(args.mbsize, args.n_steps, 1) 
+                compute_reward_partial = partial(compute_reward, env=envs[0], reward_func=args.custom_reward_fn)
+                
+                with Pool(processes=args.n_workers) as env_pool: 
+                    curr_r_env = list(env_pool.imap(compute_reward_partial, curr_ns_all)) 
+                curr_r_env = np.asarray(curr_r_env)
+                curr_r_env = curr_r_env.reshape(args.mbsize, args.n_steps, 1) 
 
-            for mb in range(args.mbsize):
-                experiences[3][mb] = torch.from_numpy(curr_r_env[mb]) 
-            # print("Multiprocessing done !") 
+                for mb in range(args.mbsize):
+                    experiences[3][mb] = torch.from_numpy(curr_r_env[mb]) 
+                # print("Multiprocessing done !") 
+            
 
-            
-            
-            
+                
+                
+                
             if args.method == 'fldb':
                 loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
             else:
@@ -143,12 +146,14 @@ if __name__ == '__main__':
     # Training
     argparser.add_argument('--device', type=str, default='cpu')
     argparser.add_argument('--progress', type=bool, default=True)
-    argparser.add_argument('--seed', type=int, default=42) 
+    argparser.add_argument('--seed', type=int, default=41) 
     argparser.add_argument('--n_train_steps', type=int, default=2000) 
+    argparser.add_argument('--n_workers', type=int, default=1) 
+    argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
     # argparser.add_argument('--log_freq', type=int, default=500)
     argparser.add_argument('--log_freq', type=int, default=20) 
     argparser.add_argument('--log_flag', type=bool, default=True)
-    argparser.add_argument('--mbsize', type=int, default=16)
+    argparser.add_argument('--mbsize', type=int, default=8)
     
     # Model 
     argparser.add_argument('--method', type=str, default='fldb') 
@@ -163,7 +168,7 @@ if __name__ == '__main__':
     argparser.add_argument('--uni_rand_pb', type=float, default=1.0) 
     
     # Environment 
-    argparser.add_argument('--envsize', type=int, default=16)
+    argparser.add_argument('--envsize', type=int, default=8)
     argparser.add_argument('--min_reward', type=float, default=1e-3)  
     # argparser.add_argument('--min_reward', type=float, default=1e-6)
     argparser.add_argument('--enable_time', type=bool, default=False)
