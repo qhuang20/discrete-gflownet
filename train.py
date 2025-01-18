@@ -3,15 +3,15 @@ import os
 import time
 import datetime
 import pickle
-from argparse import ArgumentParser
-from pathlib import Path
-
 import numpy as np   
 import torch
 import matplotlib.pyplot as plt
 import networkx as nx
 from tqdm import tqdm
-
+from argparse import ArgumentParser
+from pathlib import Path
+from functools import partial
+from multiprocessing import Pool
 
 from disc_gflownet.utils.setting import set_seed, set_device, tf
 from disc_gflownet.utils.plotting import plot_loss_curve
@@ -23,10 +23,12 @@ from disc_gflownet.envs.grid_env import GridEnv
 from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
-from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func 
+from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 
 
-
+def compute_reward(curr_ns, env, reward_func):
+    curr_ns_state = env.encoding_to_state(curr_ns)
+    return reward_func(curr_ns_state) + env.min_reward
 
 
 def main(args):
@@ -66,6 +68,31 @@ def main(args):
     try:
         for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):
             experiences = agent.sample_batch_episodes(args.mbsize)
+            
+            # print("Experiences shape:")
+            # print("batch_ss shape:", [x.shape for x in experiences[0]])
+            # print("batch_steps:", [x for x in experiences[2]])
+            # print("batch_rs shape:", [x.shape for x in experiences[3]])
+
+            # print("Start Multiprocessing !") 
+            curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
+            for mb in range(args.mbsize): 
+                curr_ns_all[mb] = experiences[0][mb].numpy()[1:]
+            curr_ns_all = curr_ns_all.reshape(args.mbsize*args.n_steps, envs[0].encoding_dim)
+
+            compute_reward_partial = partial(compute_reward, env=envs[0], reward_func=args.custom_reward_fn)
+            
+            with Pool(processes=4) as env_pool:
+                curr_r_env = list(env_pool.imap(compute_reward_partial, curr_ns_all)) 
+            curr_r_env = np.asarray(curr_r_env)
+            curr_r_env = curr_r_env.reshape(args.mbsize, args.n_steps, 1) 
+
+            for mb in range(args.mbsize):
+                experiences[3][mb] = torch.from_numpy(curr_r_env[mb]) 
+            # print("Multiprocessing done !") 
+
+            
+            
             
             if args.method == 'fldb':
                 loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
@@ -118,8 +145,8 @@ if __name__ == '__main__':
     argparser.add_argument('--progress', type=bool, default=True)
     argparser.add_argument('--seed', type=int, default=42) 
     argparser.add_argument('--n_train_steps', type=int, default=2000) 
-    argparser.add_argument('--log_freq', type=int, default=500)
-    # argparser.add_argument('--log_freq', type=int, default=20)
+    # argparser.add_argument('--log_freq', type=int, default=500)
+    argparser.add_argument('--log_freq', type=int, default=20) 
     argparser.add_argument('--log_flag', type=bool, default=True)
     argparser.add_argument('--mbsize', type=int, default=16)
     
@@ -141,15 +168,15 @@ if __name__ == '__main__':
     # argparser.add_argument('--min_reward', type=float, default=1e-6)
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
-    argparser.add_argument('--grid_bound', type=int, default=10)
-    # argparser.add_argument('--grid_bound', type=int, default=200)
-    argparser.add_argument('--n_steps', type=int, default=12)
-    # argparser.add_argument('--n_steps', type=int, default=62)
-    argparser.add_argument('--n_dims', type=int, default=2) 
-    # argparser.add_argument('--n_dims', type=int, default=9)
-    argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
-    # argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25])
+    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
+    # argparser.add_argument('--grid_bound', type=int, default=10)
+    argparser.add_argument('--grid_bound', type=int, default=200)
+    # argparser.add_argument('--n_dims', type=int, default=2) 
+    argparser.add_argument('--n_dims', type=int, default=9)
+    # argparser.add_argument('--n_steps', type=int, default=2)
+    argparser.add_argument('--n_steps', type=int, default=71) # 11*9  
+    # argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
+    argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
 
     args = argparser.parse_args()
 

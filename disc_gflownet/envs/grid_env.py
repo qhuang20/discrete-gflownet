@@ -169,8 +169,9 @@ class GridEnv(BaseEnv):
         done = (self._step == self.n_steps) or (not np.any(forward_mask))
         
         state_for_reward = self._state[1] if self.enable_time else self._state
-        reward = self.custom_reward_func(state_for_reward) + self.min_reward
+        # reward = self.custom_reward_func(state_for_reward) + self.min_reward 
             
-        return self.obs(), reward, done
+        # return dummy reward - multiprocessing takes care of the rest
+        return self.obs(), -1, done
 
 
