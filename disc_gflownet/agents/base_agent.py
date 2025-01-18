@@ -44,7 +44,6 @@ class BaseAgent:
         return self.model.parameters()
 
 
-
     def sample_batch_episodes(self, mbsize): 
         inf = 1e8
         batch_ss = [[] for i in range(mbsize)]
@@ -75,7 +74,7 @@ class BaseAgent:
                 env_idx_done_map[env_idx] = done
                 batch_ss[env_idx].append(curr_s)
                 batch_as[env_idx].append(curr_a.unsqueeze(-1))
-                batch_rs[env_idx].append(tf([curr_r])) 
+                batch_rs[env_idx].append(tf([curr_r]))  # need this
                 if done:
                     batch_ss[env_idx].append(tf(next_s))
                     env_idx_terminal_reward_map[env_idx] = curr_r
@@ -98,36 +97,66 @@ class BaseAgent:
             batch_as[i] = torch.stack(batch_as[i])
             batch_rs[i] = torch.stack(batch_rs[i])
             assert batch_ss[i].shape[0] - batch_as[i].shape[0] == 1
-        # Track unique state distribution and trajectory rewards
-        for i in range(len(batch_rs)):
-            # Get trajectory data
-            ep_states = batch_ss[i].cpu().data.numpy()  # All states in trajectory
-            ep_actions = batch_as[i].cpu().data.numpy()  # All actions in trajectory
-            ep_rewards = batch_rs[i].cpu().data.numpy()  # All rewards in trajectory
-            
-            # Get final state
-            encoding = ep_states[-1]
-            env_state = self.encoding_to_state(encoding) 
-            if self.env.enable_time:
-                env_state = tuple(env_state[1])  # Use spatial state only for tracking
-            else:
-                env_state = tuple(env_state)
+
+        return [batch_ss, batch_as, batch_steps, batch_rs]
+
+
+
+
+    def sample_batch_episodes_old(self, mbsize): 
+        inf = 1e8
+        batch_ss = [[] for i in range(mbsize)]
+        batch_as = [[] for i in range(mbsize)]
+        batch_rs = [[] for i in range(mbsize)]
+        env_idx_done_map = {i: False for i in range(mbsize)}
+        env_idx_terminal_reward_map = {} 
+        notdone_env_idxs = [i for i in range(mbsize)]
+
+        s_s = tf([i.reset() for i in self.envs])
+        done_s = [False] * mbsize
+        while not all(done_s):
+            with torch.no_grad():
+                pred = self.model(s_s)
                 
-            # Update counts
-            if env_state in self.ep_last_state_counts:
-                self.ep_last_state_counts[env_state] += 1
-            else:
-                self.ep_last_state_counts[env_state] = 1
-                self.ep_last_state_trajectories[env_state] = []
-                
-            # Store full trajectory
-            trajectory = {
-                'states': ep_states,
-                'actions': ep_actions,
-                'rewards': ep_rewards
-            }
-            self.ep_last_state_trajectories[env_state].append(trajectory)
-        
+                forward_mask = tf(self.action_mask_fn(s_s.cpu().numpy(), "fwd"))
+                logits = torch.where(forward_mask.bool(), pred[..., :self.action_dim], -inf).log_softmax(1) # no stop implemented
+                action_probs = (1 - self.explore_ratio) * (logits / self.temp).softmax(1) + self.explore_ratio * (forward_mask) / (forward_mask + 1e-7).sum(1).unsqueeze(1)
+
+                a_s = action_probs.multinomial(1)
+                a_s = a_s.squeeze(-1)
+
+            step = [notdone_env.step(a) 
+                    for notdone_env, a in zip([e for d, e in zip(done_s, self.envs) if not d], a_s)]
+
+            for i, (curr_s, curr_a, (next_s, curr_r, done)) in enumerate(zip(s_s, a_s, step)):
+                env_idx = notdone_env_idxs[i] # not done environment index
+                env_idx_done_map[env_idx] = done
+                batch_ss[env_idx].append(curr_s)
+                batch_as[env_idx].append(curr_a.unsqueeze(-1))
+                batch_rs[env_idx].append(tf([curr_r]))  # need this
+                if done:
+                    batch_ss[env_idx].append(tf(next_s))
+                    env_idx_terminal_reward_map[env_idx] = curr_r
+
+            notdone_env_idxs = []
+            for env_idx in env_idx_done_map:
+                if not env_idx_done_map[env_idx]:
+                    notdone_env_idxs.append(env_idx)
+
+            c = count(0)
+            m = {j: next(c) for j in range(mbsize) if not done_s[j]}
+            done_s = [bool(d or step[m[i]][2]) for i, d in enumerate(done_s)] # update done flags 
+            s_s = tf([i[0] for i in step if not i[2]]) # update states in not done environments
+
+        batch_steps = [len(batch_ss[i]) for i in range(len(batch_ss))]
+
+        """post-process"""
+        for i in range(len(batch_ss)):
+            batch_ss[i] = torch.stack(batch_ss[i])
+            batch_as[i] = torch.stack(batch_as[i])
+            batch_rs[i] = torch.stack(batch_rs[i])
+            assert batch_ss[i].shape[0] - batch_as[i].shape[0] == 1
+
         return [batch_ss, batch_as, batch_steps, batch_rs]
 
 

@@ -173,7 +173,7 @@ class GridEnv(BaseEnv):
         done = (self._step == self.n_steps) or (not np.any(forward_mask))
         
         state_for_reward = self._state[1] if self.enable_time else self._state
-        
+        """
         # Use cached reward if available, otherwise compute and cache it
         state_key = tuple(state_for_reward)
         if state_key in self.reward_cache:
@@ -181,6 +181,8 @@ class GridEnv(BaseEnv):
         else:
             reward = self.custom_reward_func(state_for_reward) + self.min_reward
             self.reward_cache[state_key] = reward
-            
-        return self.obs(), reward, done
+        """
+
+        # return dummy reward - multiprocessing takes care of the rest
+        return self.obs(), 0.01, done
 
