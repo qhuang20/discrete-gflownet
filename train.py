@@ -1,147 +1,162 @@
-import numpy as np
-import networkx as nx
+import sys
+import os
+import time
+import datetime
 import pickle
+from argparse import ArgumentParser
+from pathlib import Path
+
+import numpy as np   
+import torch
+import matplotlib.pyplot as plt
+import networkx as nx
+from tqdm import tqdm
+
+
+from disc_gflownet.utils.setting import set_seed, set_device, tf
+from disc_gflownet.utils.plotting import plot_loss_curve
+from disc_gflownet.utils.logging import log_arguments, log_training_loop, track_trajectories
+from disc_gflownet.utils.cache import LRUCache
+from disc_gflownet.agents.tbflownet_agent import TBFlowNetAgent
+from disc_gflownet.agents.dbflownet_agent import DBFlowNetAgent
+from disc_gflownet.envs.grid_env import GridEnv
+from disc_gflownet.envs.set_env import SetEnv
+
+from scipy.integrate import solve_ivp
+from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func 
+
+
 
 
 
 def main(args):
-    pass
+    global losses, zs, agent
+    global ep_last_state_counts, ep_last_state_trajectories 
 
-
-if __name__ == "__main__":
-    from argparse import ArgumentParser
-    from pathlib import Path
-    import json
-    
-    parser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
-    args = parser.parse_args()
-
-    main(args)
-    
-    
-    
-
-
-def main(args):
-    global all_losses  
-    global logZs
-    global agent
-    
+    assert args.envsize == args.mbsize
     set_seed(args.seed)
-    args.dev = torch.device(args.device)
-    set_device(args.dev)
-    method_name = args.method
-
-    # # explore_ratio is fine-tuned for each method by grid search
-    # if method_name == 'tb_gfn':
-    #     args.explore_ratio = 0.0625
-    # elif method_name == 'db_gfn':
-    #     args.explore_ratio = 0.0625 # 0.1
-    # elif method_name == 'fldb_gfn':
-    #     args.explore_ratio = 0.0625 # 0.5
-
-
-
+    set_device(torch.device(args.device))
     
-    envs = [SetEnv(args) for i in range(args.envsize)]
-
-    if args.method == 'tb_gfn':
+    # Environment setup 
+    envs = [GridEnv(args) for _ in range(args.envsize)]
+    
+    # Agent setup
+    if args.method == 'tb':
         agent = TBFlowNetAgent(args, envs)
-        opt = torch.optim.Adam([{'params': agent.parameters(), 'lr': args.tb_lr}, {'params':[agent.Z], 'lr': args.tb_z_lr} ])
-    elif args.method == 'db_gfn' or args.method == 'fldb_gfn':
+        opt = torch.optim.Adam([{'params': agent.parameters(), 'lr': args.tb_lr}, {'params':[agent.log_z], 'lr': args.tb_z_lr} ])
+    elif args.method == 'db' or args.method == 'fldb':
         agent = DBFlowNetAgent(args, envs)
         opt = torch.optim.Adam([{'params': agent.parameters(), 'lr': args.tb_lr}])
 
+    # Logging setup
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"{args.method}_h{args.n_hid}_l{args.n_layers}_mr{args.min_reward}_ts{args.n_train_steps}_d{args.n_dims}_s{args.n_steps}_er{args.explore_ratio}_et{args.enable_time}" 
+    run_dir = os.path.join('runs', f'{timestamp}_{run_name}') 
+    os.makedirs(run_dir, exist_ok=True)
+    if args.log_flag:
+        log_filename = os.path.join(run_dir, 'training.log') 
+        log_arguments(log_filename, args)
 
-
-
+    """Training Loop"""
     
-    
-    
-    """train"""
-    
-    all_losses = [] 
-    logZs = []  # only for tb_gfn
-    for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):
-        # print("\n" + "-"*30 + "training step: " + str(i) + "-"*30)
-        experiences = agent.sample_batch_episodes(args.mbsize)
-        # print(len(experiences))
-        # print(experiences)
-        if method_name == 'fldb_gfn':
-            losses = agent.compute_batch_loss(experiences, use_fldb=True) 
-        else:
-            losses = agent.compute_batch_loss(experiences) 
+    losses = [] 
+    zs = []  
+    ep_last_state_counts = {} # Counts occurrences of each episode last state.
+    ep_last_state_trajectories = {}  # Store trajectories (states, actions, rewards) for each last state
+    try:
+        for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):
+            experiences = agent.sample_batch_episodes(args.mbsize)
             
-        all_losses.append(losses[0].item())
-        logZs.append(losses[1].item()) 
+            if args.method == 'fldb':
+                loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
+            else:
+                loss, z = agent.compute_batch_loss(experiences) 
+                
+            losses.append(loss.item())
+            zs.append(z.item()) 
 
-        losses[0].backward()
-        opt.step()
-        opt.zero_grad()
-        
-        if i % args.log_freq == 0:
-            print("--------------------------------")
-            print("\nStep", i)
-            print("Number of unique states found:", len(agent.ep_last_state_counts)) 
-            print("\nTop 12 states by reward:")
-            top_states = sorted(agent.ep_last_state_ep_rewards.items(), 
-                              key=lambda x: x[1][-1], # Sort by last reward in trajectory
-                              reverse=True)[:12]
-            for state in top_states:
-                ep_rewards = [f"{r[0]:.3f}" for r in agent.ep_last_state_ep_rewards[state[0]]]
-                count = agent.ep_last_state_counts[state[0]]
-                print(f"Full trajectory rewards: {ep_rewards}, Count: {count}, State: {state[0]}")
-            print("\n")
+            loss.backward()
+            opt.step()
+            opt.zero_grad() 
+            
+            # Track trajectories 
+            track_trajectories(experiences, envs[0], ep_last_state_counts, ep_last_state_trajectories)
+            if i % args.log_freq == 0 and args.log_flag:
+                log_training_loop(log_filename, agent, i, ep_last_state_counts, ep_last_state_trajectories) 
+                
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user.")
+        checkpoint = {
+            'losses': losses,
+            'zs': zs,
+            'agent_state_dict': agent.model.state_dict(),
+            'optimizer_state_dict': opt.state_dict(),
+            'current_step': i,
+            'ep_last_state_counts': ep_last_state_counts,
+            'ep_last_state_trajectories': ep_last_state_trajectories,
+        }
+        checkpoint_path = os.path.join(run_dir, 'checkpoint_interrupted.pt')
+        torch.save(checkpoint, checkpoint_path)
+        print(f"Checkpoint saved to {checkpoint_path}")
+        sys.exit(0)  # Gracefully exit the program
+    except Exception as e:
+        # Handle other exceptions
+        print("\nAn unexpected error occurred:", e)
+        raise
 
-
-
-
-
-# if args.size == 'tiny':
-#     args.action_dim = 3
-#     args.set_size = 2
-#     intermediate_energies = interm_energies['tiny']
-# elif args.size == 'small':
-#     args.action_dim = 30
-#     args.set_size = 20
-#     intermediate_energies = interm_energies['small']
-# elif args.size == 'medium':
-#     args.action_dim = 80
-#     args.set_size = 60
-#     intermediate_energies = interm_energies['medium']
-# elif args.size == 'large':
-#     args.action_dim = 100
-#     args.set_size = 80
-#     intermediate_energies = interm_energies['large']
+    return losses, zs, agent, ep_last_state_counts, ep_last_state_trajectories 
 
 
 
-# Set up argparse arguments manually
-args = argparse.Namespace(
-    device='cpu',
-    progress=True,
-    seed=0,
-    n_train_steps=1000,  # 2000
-    log_freq=1000,
-    mbsize=16, #16
-    # Model
-    method='db_gfn',
-    learning_rate=1e-4,
-    tb_lr=0.001,
-    tb_z_lr=0.1,
-    n_hid=256,
-    n_layers=2,
-    explore_ratio=0.2,
-    temp=1.,
-    uni_rand_pb=1,
-    # Env
-    envsize=16, #16
-    custom_reward_fn=set_custom_reward_func,
-    reward_set_size='tiny',
-    action_dim=3,
-    set_size=2,
+
+
+if __name__ == '__main__':
+    argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
     
-)
+    # Training
+    argparser.add_argument('--device', type=str, default='cpu')
+    argparser.add_argument('--progress', type=bool, default=True)
+    argparser.add_argument('--seed', type=int, default=42) 
+    argparser.add_argument('--n_train_steps', type=int, default=2000) 
+    argparser.add_argument('--log_freq', type=int, default=500)
+    # argparser.add_argument('--log_freq', type=int, default=20)
+    argparser.add_argument('--log_flag', type=bool, default=True)
+    argparser.add_argument('--mbsize', type=int, default=16)
+    
+    # Model 
+    argparser.add_argument('--method', type=str, default='fldb') 
+    # argparser.add_argument('--explore_ratio', type=float, default=0.06)
+    argparser.add_argument('--explore_ratio', type=float, default=0.35)
+    argparser.add_argument('--learning_rate', type=float, default=1e-3)
+    argparser.add_argument('--tb_lr', type=float, default=0.01)
+    argparser.add_argument('--tb_z_lr', type=float, default=0.1)
+    argparser.add_argument('--n_hid', type=int, default=256)
+    argparser.add_argument('--n_layers', type=int, default=3)
+    argparser.add_argument('--temp', type=float, default=1.0)
+    argparser.add_argument('--uni_rand_pb', type=float, default=1.0) 
+    
+    # Environment 
+    argparser.add_argument('--envsize', type=int, default=16)
+    argparser.add_argument('--min_reward', type=float, default=1e-3)  
+    # argparser.add_argument('--min_reward', type=float, default=1e-6)
+    argparser.add_argument('--enable_time', type=bool, default=False)
+    argparser.add_argument('--consistent_signs', type=bool, default=True) 
+    argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
+    argparser.add_argument('--grid_bound', type=int, default=10)
+    # argparser.add_argument('--grid_bound', type=int, default=200)
+    argparser.add_argument('--n_steps', type=int, default=12)
+    # argparser.add_argument('--n_steps', type=int, default=62)
+    argparser.add_argument('--n_dims', type=int, default=2) 
+    # argparser.add_argument('--n_dims', type=int, default=9)
+    argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
+    # argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25])
 
-# Call the main function
-main(args)
+    args = argparser.parse_args()
+
+
+    # Training
+    main(args)
+    # print("losses: ", losses)
+
+
+

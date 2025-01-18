@@ -35,10 +35,7 @@ class BaseAgent:
         self.temp = args.temp
         self.uniform_pb = args.uni_rand_pb
 
-        # Track unique state distribution and trajectory rewards
-        self.encoding_to_state = self.env.encoding_to_state
-        self.ep_last_state_counts = {}  # Counts occurrences of each episode last state.
-        self.ep_last_state_trajectories = {}  # Store trajectories (states, actions, rewards) for each last state
+
 
     def parameters(self):
         return self.model.parameters()
@@ -90,43 +87,14 @@ class BaseAgent:
             done_s = [bool(d or step[m[i]][2]) for i, d in enumerate(done_s)] # update done flags 
             s_s = tf([i[0] for i in step if not i[2]]) # update states in not done environments
 
-        batch_steps = [len(batch_ss[i]) for i in range(len(batch_ss))]
-
         """post-process"""
+        batch_steps = [len(batch_ss[i]) for i in range(len(batch_ss))]
+        
         for i in range(len(batch_ss)):
             batch_ss[i] = torch.stack(batch_ss[i])
             batch_as[i] = torch.stack(batch_as[i])
             batch_rs[i] = torch.stack(batch_rs[i])
             assert batch_ss[i].shape[0] - batch_as[i].shape[0] == 1
-        # Track unique state distribution and trajectory rewards
-        for i in range(len(batch_rs)):
-            # Get trajectory data
-            ep_states = batch_ss[i].cpu().data.numpy()  # All states in trajectory
-            ep_actions = batch_as[i].cpu().data.numpy()  # All actions in trajectory
-            ep_rewards = batch_rs[i].cpu().data.numpy()  # All rewards in trajectory
-            
-            # Get final state
-            encoding = ep_states[-1]
-            env_state = self.encoding_to_state(encoding) 
-            if self.env.enable_time:
-                env_state = tuple(env_state[1])  # Use spatial state only for tracking
-            else:
-                env_state = tuple(env_state)
-                
-            # Update counts
-            if env_state in self.ep_last_state_counts:
-                self.ep_last_state_counts[env_state] += 1
-            else:
-                self.ep_last_state_counts[env_state] = 1
-                self.ep_last_state_trajectories[env_state] = []
-                
-            # Store full trajectory
-            trajectory = {
-                'states': ep_states,
-                'actions': ep_actions,
-                'rewards': ep_rewards
-            }
-            self.ep_last_state_trajectories[env_state].append(trajectory)
         
         return [batch_ss, batch_as, batch_steps, batch_rs]
 

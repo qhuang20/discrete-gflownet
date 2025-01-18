@@ -1,6 +1,5 @@
 import numpy as np
 from .base_env import BaseEnv
-from ..utils.cache import LRUCache
 
 
 class GridEnv(BaseEnv): 
@@ -24,9 +23,6 @@ class GridEnv(BaseEnv):
         self.consistent_signs = args.consistent_signs # New flag to enforce consistent signs per dimension
         base_encoding_dim = (2 * self.grid_bound + 1) * self.n_dims if self.has_mixed_actions else (self.grid_bound + 1) * self.n_dims
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
-        
-        # Initialize reward cache
-        self.reward_cache = LRUCache(max_size=args.cache_max_size) 
     
     def print_actions(self):
         print("-"*42)
@@ -173,14 +169,8 @@ class GridEnv(BaseEnv):
         done = (self._step == self.n_steps) or (not np.any(forward_mask))
         
         state_for_reward = self._state[1] if self.enable_time else self._state
-        
-        # Use cached reward if available, otherwise compute and cache it
-        state_key = tuple(state_for_reward)
-        if state_key in self.reward_cache:
-            reward = self.reward_cache[state_key]
-        else:
-            reward = self.custom_reward_func(state_for_reward) + self.min_reward
-            self.reward_cache[state_key] = reward
+        reward = self.custom_reward_func(state_for_reward) + self.min_reward
             
         return self.obs(), reward, done
+
 

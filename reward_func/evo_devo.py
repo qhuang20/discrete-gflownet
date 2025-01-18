@@ -8,8 +8,8 @@ import time
 
 def coord_reward_func(state):
     # reward1 = sum(1 for coord in state if coord == 5) + 0.001 # args.min_reward
-    reward1 = sum(5 for coord in state if coord == 6) + 0.001 
-    reward2 = sum(10 for coord in state if coord == 8) + 0.001 
+    reward1 = sum(1 for coord in state if coord == 6) 
+    reward2 = sum(2 for coord in state if coord == 8) 
     return reward1 + reward2
 
 
@@ -437,7 +437,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
         check_indices = np.linspace(mid_idx, len(x1_concentration)-1, N_BOUNDARY_CHECKS, dtype=int)
         
         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
-        print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
+        if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
         
         if total_boundaries <= 3:
             return 0.0
@@ -449,7 +449,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
         max_possible_changes = (len(second_half) - 1) * N_CELLS
         
         stability_reward = round(STABILITY_WEIGHT * (1 - total_changes / max_possible_changes), 3)
-        print(f"Stability reward: {stability_reward}")
+        if plot: print(f"Stability reward: {stability_reward}")
         
         return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
 
