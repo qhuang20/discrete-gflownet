@@ -6,7 +6,6 @@ import pickle
 import numpy as np   
 import torch
 import matplotlib.pyplot as plt
-import networkx as nx
 from tqdm import tqdm
 from argparse import ArgumentParser
 from pathlib import Path
