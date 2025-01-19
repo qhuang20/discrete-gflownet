@@ -31,6 +31,32 @@ def compute_reward(curr_ns, env, reward_func):
     return reward_func(curr_ns_state) + env.min_reward
 
 
+def save_checkpoint(run_dir, agent, opt, losses, zs, current_step, ep_last_state_counts, ep_last_state_trajectories, interrupted=False):
+    """Save training checkpoint to file"""
+    checkpoint = {
+        'losses': losses,
+        'zs': zs,
+        'agent_state_dict': agent.model.state_dict(),
+        'optimizer_state_dict': opt.state_dict(),
+        'current_step': current_step,
+        'ep_last_state_counts': ep_last_state_counts,
+        'ep_last_state_trajectories': ep_last_state_trajectories,
+    }
+    
+    filename = 'checkpoint_interrupted.pt' if interrupted else 'checkpoint.pt'
+    checkpoint_path = os.path.join(run_dir, filename)
+    torch.save(checkpoint, checkpoint_path)
+    
+    if interrupted:
+        print(f"\nTraining interrupted by user.")
+        print(f"Checkpoint saved to {checkpoint_path}")
+
+
+
+
+
+
+
 def main(args):
     global losses, zs, agent
     global ep_last_state_counts, ep_last_state_trajectories 
@@ -93,9 +119,7 @@ def main(args):
                     experiences[3][mb] = torch.from_numpy(curr_r_env[mb]) 
                 # print("Multiprocessing done !") 
             
-
-                
-                
+                                
                 
             if args.method == 'fldb':
                 loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
@@ -110,24 +134,16 @@ def main(args):
             opt.zero_grad() 
             
             # Track trajectories 
-            track_trajectories(experiences, envs[0], ep_last_state_counts, ep_last_state_trajectories)
+            track_trajectories(experiences, envs[0], ep_last_state_counts, ep_last_state_trajectories) 
             if i % args.log_freq == 0 and args.log_flag:
                 log_training_loop(log_filename, agent, i, ep_last_state_counts, ep_last_state_trajectories) 
+
+            # Save checkpoint every 1000 episodes
+            if i % 1000 == 0:
+                save_checkpoint(run_dir, agent, opt, losses, zs, i, ep_last_state_counts, ep_last_state_trajectories)
                 
     except KeyboardInterrupt:
-        print("\nTraining interrupted by user.")
-        checkpoint = {
-            'losses': losses,
-            'zs': zs,
-            'agent_state_dict': agent.model.state_dict(),
-            'optimizer_state_dict': opt.state_dict(),
-            'current_step': i,
-            'ep_last_state_counts': ep_last_state_counts,
-            'ep_last_state_trajectories': ep_last_state_trajectories,
-        }
-        checkpoint_path = os.path.join(run_dir, 'checkpoint_interrupted.pt')
-        torch.save(checkpoint, checkpoint_path)
-        print(f"Checkpoint saved to {checkpoint_path}")
+        save_checkpoint(run_dir, agent, opt, losses, zs, i, ep_last_state_counts, ep_last_state_trajectories, interrupted=True)
         sys.exit(0)  # Gracefully exit the program
     except Exception as e:
         # Handle other exceptions
@@ -173,7 +189,7 @@ if __name__ == '__main__':
     # argparser.add_argument('--min_reward', type=float, default=1e-6)
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
+    argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
     # argparser.add_argument('--grid_bound', type=int, default=10)
     argparser.add_argument('--grid_bound', type=int, default=200)
     # argparser.add_argument('--n_dims', type=int, default=2) 

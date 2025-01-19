@@ -417,7 +417,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
             (t[0], t[-1]),
             x0,
             t_eval=t,
-            method='LSODA',
+            method='RK45',
             rtol=RTOL,
             atol=ATOL
         )

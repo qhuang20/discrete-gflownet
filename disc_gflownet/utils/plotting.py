@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.cm as cm
+import os
 
 
-def plot_loss_curve(losses_A, losses_B=None, zs=None, title=""):
+def plot_loss_curve(losses_A, losses_B=None, zs=None, title="", save_dir=None):
     if zs is not None:
         fig, ax = plt.subplots(2, 1, figsize=(10, 6))
         plt.sca(ax[0])
@@ -30,8 +31,10 @@ def plot_loss_curve(losses_A, losses_B=None, zs=None, title=""):
         plt.xlabel('Training Steps')
         plt.title(title)
 
-    plt.show()
-
-
-
+    if save_dir is not None:
+        output_img_loss = os.path.join(save_dir, "loss_curve.png")
+        plt.savefig(output_img_loss)
+        plt.close()
+    else:
+        plt.show()
 
