@@ -381,7 +381,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
     DELTA_SOMITE = 0.1
     DELTA_STABILITY = 0.02
     STABILITY_WEIGHT = 1.0
-    STABILITY_POWER = 10
+    STABILITY_POWER = 3  # smaller tolerates waves more 
     RTOL = 1e-3
     ATOL = 1e-6
     WEIGHT_SCALE = 20
@@ -439,7 +439,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
         
-        if total_boundaries <= 3:
+        if total_boundaries <= 6:  # to prevent slope 
             return 0.0
             
         # Vectorized stability calculation
