@@ -157,17 +157,21 @@ def main(args):
 
 
 if __name__ == '__main__':
+    print(f"Available CPU threads: {os.cpu_count()}")
+    print(f"Default PyTorch threads: {torch.get_num_threads()}")
+    torch.set_num_threads(10) 
+    
     argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
     
     # Training
     argparser.add_argument('--device', type=str, default='cpu')
     argparser.add_argument('--progress', type=bool, default=True)
-    argparser.add_argument('--seed', type=int, default=41) 
-    argparser.add_argument('--n_train_steps', type=int, default=2000) 
+    argparser.add_argument('--seed', type=int, default=42) 
+    argparser.add_argument('--n_train_steps', type=int, default=6000) 
     argparser.add_argument('--n_workers', type=int, default=1) 
     argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
     # argparser.add_argument('--log_freq', type=int, default=500)
-    argparser.add_argument('--log_freq', type=int, default=20) 
+    argparser.add_argument('--log_freq', type=int, default=100) 
     argparser.add_argument('--log_flag', type=bool, default=True)
     argparser.add_argument('--mbsize', type=int, default=8)
     
@@ -189,13 +193,13 @@ if __name__ == '__main__':
     # argparser.add_argument('--min_reward', type=float, default=1e-6)
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
+    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
     # argparser.add_argument('--grid_bound', type=int, default=10)
     argparser.add_argument('--grid_bound', type=int, default=200)
     # argparser.add_argument('--n_dims', type=int, default=2) 
     argparser.add_argument('--n_dims', type=int, default=9)
     # argparser.add_argument('--n_steps', type=int, default=2)
-    argparser.add_argument('--n_steps', type=int, default=71) # 11*9  
+    argparser.add_argument('--n_steps', type=int, default=55) # 11*9  
     # argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
     argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
 
