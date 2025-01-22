@@ -158,7 +158,7 @@ def main(args):
 if __name__ == '__main__':
     print(f"Available CPU threads: {os.cpu_count()}")
     print(f"Default PyTorch threads: {torch.get_num_threads()}")
-    torch.set_num_threads(10) 
+    torch.set_num_threads(1) 
     
     argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
     
@@ -175,10 +175,10 @@ if __name__ == '__main__':
     argparser.add_argument('--mbsize', type=int, default=8)
     
     # Model 
-    argparser.add_argument('--method', type=str, default='tb') 
-    # argparser.add_argument('--method', type=str, default='fldb') 
-    argparser.add_argument('--explore_ratio', type=float, default=0.06) 
-    # argparser.add_argument('--explore_ratio', type=float, default=0.35)
+    # argparser.add_argument('--method', type=str, default='tb') 
+    argparser.add_argument('--method', type=str, default='fldb') 
+    # argparser.add_argument('--explore_ratio', type=float, default=0.06) 
+    argparser.add_argument('--explore_ratio', type=float, default=0.35)
     argparser.add_argument('--learning_rate', type=float, default=1e-3)
     argparser.add_argument('--tb_lr', type=float, default=0.01)
     argparser.add_argument('--tb_z_lr', type=float, default=0.1)
