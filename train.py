@@ -172,9 +172,10 @@ if __name__ == '__main__':
     argparser.add_argument('--mbsize', type=int, default=8)
     
     # Model 
-    argparser.add_argument('--method', type=str, default='fldb') 
-    # argparser.add_argument('--explore_ratio', type=float, default=0.06)
-    argparser.add_argument('--explore_ratio', type=float, default=0.35)
+    argparser.add_argument('--method', type=str, default='tb') 
+    # argparser.add_argument('--method', type=str, default='fldb') 
+    argparser.add_argument('--explore_ratio', type=float, default=0.06) 
+    # argparser.add_argument('--explore_ratio', type=float, default=0.35)
     argparser.add_argument('--learning_rate', type=float, default=1e-3)
     argparser.add_argument('--tb_lr', type=float, default=0.01)
     argparser.add_argument('--tb_z_lr', type=float, default=0.1)
@@ -192,12 +193,12 @@ if __name__ == '__main__':
     argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
     # argparser.add_argument('--grid_bound', type=int, default=10)
     argparser.add_argument('--grid_bound', type=int, default=200)
-    # argparser.add_argument('--n_dims', type=int, default=2) 
-    argparser.add_argument('--n_dims', type=int, default=9)
-    # argparser.add_argument('--n_steps', type=int, default=2)
-    argparser.add_argument('--n_steps', type=int, default=71) # 11*9  
-    # argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
-    argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
+    argparser.add_argument('--n_dims', type=int, default=2)  
+    # argparser.add_argument('--n_dims', type=int, default=9)
+    argparser.add_argument('--n_steps', type=int, default=4)
+    # argparser.add_argument('--n_steps', type=int, default=71) # 11*9  
+    argparser.add_argument('--actions_per_dim', type=list, default=[2])
+    # argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
 
     args = argparser.parse_args()
 

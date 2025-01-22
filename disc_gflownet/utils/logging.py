@@ -1,3 +1,4 @@
+import numpy as np
 
 
 def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_trajectories):
@@ -9,6 +10,12 @@ def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_traj
         ep_states_encoded = batch_ss[i].cpu().data.numpy()
         ep_actions = batch_as[i].cpu().data.numpy()
         ep_rewards = batch_rs[i].cpu().data.numpy()
+        
+        # Print shapes
+        # print(f"ep_states_encoded shape: {ep_states_encoded.shape}")
+        # print(f"ep_actions shape: {ep_actions.shape}")
+        # print(f"ep_rewards shape: {ep_rewards.shape}")
+        # exit()
         
         # Convert encoded states to actual states
         ep_states = []
@@ -30,11 +37,14 @@ def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_traj
             ep_last_state_counts[env_state] = 1
             ep_last_state_trajectories[env_state] = []
             
+        # Add initial state reward of 0 to match state length
+        padded_rewards = np.vstack(([0], ep_rewards))
+            
         # Store trajectory
         trajectory = {
             'states': ep_states,
-            'actions': ep_actions, 
-            'rewards': ep_rewards
+            'actions': ep_actions,
+            'rewards': padded_rewards
         }
         ep_last_state_trajectories[env_state].append(trajectory)
         
@@ -96,8 +106,6 @@ def log_training_loop(log_filename, agent, step, ep_last_state_counts, ep_last_s
                 print(f"Trajectory state-reward pairs: {state_reward_pairs}, Average: {traj_avg:.3f}", file=f)
             print("", file=f)
         print("\n", file=f)
-            
-        
         
         
         # print("-" * 30, file=f)
