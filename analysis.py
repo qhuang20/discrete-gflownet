@@ -28,9 +28,13 @@ from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somi
 
 
 
+# Parse command line arguments
+parser = ArgumentParser()
+parser.add_argument('--run_dir', type=str, required=True, help='Directory containing checkpoint file')
+args = parser.parse_args()
+
 # Load checkpoint
-run_dir = "20250118_173924_fldb_h256_l3_mr0.001_ts2000_d9_s71_er0.35_etFalse"
-checkpoint_path = f"runs/{run_dir}/checkpoint_interrupted.pt"
+checkpoint_path = f"runs/{args.run_dir}/checkpoint.pt"  # checkpoint_interrupted 
 checkpoint = torch.load(checkpoint_path)
 
 losses = checkpoint['losses']
@@ -92,8 +96,9 @@ print("The final Z (partition function) estimate is {:.2f}".format(zs[-1]))
 TOP_N = 20  # Number of top states to analyze
 output_path = os.path.join(os.path.dirname(checkpoint_path), "analysis_results.txt")
 with open(output_path, 'w') as f:
+    """By avg average trajectory rewards"""
     f.write("-" * 30 + "\n")
-    f.write(f"Top {TOP_N} by Avg trajectory rewards:\n")
+    f.write(f"Top {TOP_N} by Avg average trajectory rewards:\n") 
     f.write("-" * 30 + "\n")
 
     # Calculate average trajectory rewards for each state
@@ -115,6 +120,34 @@ with open(output_path, 'w') as f:
         trajectories = ep_last_state_trajectories[state]
         terminal_reward = trajectories[0]['rewards'][-1][0]
         count = ep_last_state_counts[state]
+        
+        f.write(f"State: {state}, Count: {count}, Terminal reward: {terminal_reward:.3f}, Avg trajectory reward: {avg_reward:.3f}\n")
+        
+        # Write each trajectory and its average reward
+        for traj in trajectories:
+            rewards = [r[0] for r in traj['rewards']]
+            states = traj['states']
+            traj_avg = sum(rewards) / len(rewards)
+            f.write(f"Trajectory state-reward pairs: {[(states[i], f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
+        f.write("\n")
+
+    
+    
+    """By count"""
+    f.write("\n" + "-" * 30 + "\n")
+    f.write(f"Top {TOP_N} by Count:\n")
+    f.write("-" * 30 + "\n")
+
+    top_count_states = sorted(
+        ep_last_state_counts.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:TOP_N]
+
+    for state, count in top_count_states:
+        trajectories = ep_last_state_trajectories[state]
+        terminal_reward = trajectories[0]['rewards'][-1][0]
+        avg_reward = state_avg_rewards[state]
         
         f.write(f"State: {state}, Count: {count}, Terminal reward: {terminal_reward:.3f}, Avg trajectory reward: {avg_reward:.3f}\n")
         

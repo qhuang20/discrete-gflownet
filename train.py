@@ -175,9 +175,10 @@ if __name__ == '__main__':
     argparser.add_argument('--mbsize', type=int, default=8)
     
     # Model 
-    argparser.add_argument('--method', type=str, default='fldb') 
-    # argparser.add_argument('--explore_ratio', type=float, default=0.06)
-    argparser.add_argument('--explore_ratio', type=float, default=0.35)
+    argparser.add_argument('--method', type=str, default='tb') 
+    # argparser.add_argument('--method', type=str, default='fldb') 
+    argparser.add_argument('--explore_ratio', type=float, default=0.06) 
+    # argparser.add_argument('--explore_ratio', type=float, default=0.35)
     argparser.add_argument('--learning_rate', type=float, default=1e-3)
     argparser.add_argument('--tb_lr', type=float, default=0.01)
     argparser.add_argument('--tb_z_lr', type=float, default=0.1)
