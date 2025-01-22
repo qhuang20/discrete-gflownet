@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt
+import os
 import numpy as np
 import matplotlib.cm as cm
-import os
+import matplotlib.pyplot as plt
+
 
 
 def plot_loss_curve(losses_A, losses_B=None, zs=None, title="", save_dir=None):
@@ -37,4 +38,7 @@ def plot_loss_curve(losses_A, losses_B=None, zs=None, title="", save_dir=None):
         plt.close()
     else:
         plt.show()
+
+
+
 

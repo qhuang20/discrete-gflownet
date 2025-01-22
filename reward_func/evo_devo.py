@@ -361,14 +361,16 @@ def oscillator_reward_func(weights, plot=False):
 
 
 
-def somitogenesis_reward_func(state, plot=False, subplot=None):
+
+
+def somitogenesis_reward_func(state, plot=False, ax=None):
     """
     Calculate reward based on gene expression pattern simulation.
     
     Args:
         state: 1D array of weights [w11, w12, w13, w21, w22, w23, w31, w32, w33]
         plot: bool, whether to plot the heatmap (default: False)
-        subplot: matplotlib subplot object for plotting in a grid (default: None)
+        ax: matplotlib axes object for plotting in a grid (default: None)
         
     Returns:
         float: Reward value based on pattern formation and stability
@@ -453,13 +455,11 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
         
         return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
 
-    def plot_heatmap(x1_concentration, t, subplot=None):
+    def plot_heatmap(x1_concentration, t, ax=None):
         """Plot heatmap (unchanged since plotting is not performance critical)"""
-        if subplot is None:
+        if ax is None:
             plt.figure(figsize=(10, 6))
             ax = plt.gca()
-        else:
-            ax = subplot
             
         im = ax.imshow(x1_concentration.T, aspect='auto', cmap='Blues',
                       extent=[0, N_SIMTIME, 100, 0])
@@ -468,7 +468,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
         ax.set_ylabel('Position')
         ax.set_title('x1 Concentration Across Time and Space')
         
-        if subplot is None:
+        if ax is None:
             plt.show()
 
     # Main execution
@@ -476,7 +476,7 @@ def somitogenesis_reward_func(state, plot=False, subplot=None):
     x1_concentration = sol[:, :, 0]
     
     if plot:
-        plot_heatmap(x1_concentration, t, subplot)
+        plot_heatmap(x1_concentration, t, ax)
     
     return calculate_reward(x1_concentration)
 
