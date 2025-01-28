@@ -32,7 +32,11 @@ from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somi
 
 
 
-def draw_network_motif(state, ax=None, node_size=200):
+def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
+    if ax is None:
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        
     num_nodes = int(np.sqrt(len(state)))
     weight_matrix = np.array(state).reshape(num_nodes, num_nodes)    
     G = nx.DiGraph()
@@ -49,80 +53,72 @@ def draw_network_motif(state, ax=None, node_size=200):
                 edge = (i + 1, j + 1)  # Changed from (j + 1, i + 1)
                 G.add_edge(*edge, weight=weight_matrix[i, j])
                 edge_colors_dict[edge] = 'blue' if weight_matrix[i, j] < 0 else 'red'
-                edge_widths_dict[edge] = abs(weight_matrix[i, j])
+                # Clip weight to max_edge_weight and scale to width between 0.5 and 5
+                weight = min(abs(weight_matrix[i, j]), max_edge_weight)
+                edge_widths_dict[edge] = 0.5 + (weight * 9.5 / max_edge_weight)
     
     edge_colors = [edge_colors_dict[edge] for edge in G.edges]
     edge_widths = [edge_widths_dict[edge] for edge in G.edges]
     
-    # Normalize edge widths for better visualization
-    if edge_widths:
-        min_width = min(edge_widths)
-        max_width = max(edge_widths)
-        if min_width != max_width:
-            edge_widths = [0.1 + 5 * ((width - min_width) / (max_width - min_width)) for width in edge_widths]
-        edge_widths = [max(width, 0.5) for width in edge_widths]  # Ensure minimum visibility
-    
     # Draw the graph
     pos = nx.circular_layout(G)
     nx.draw(G, pos, ax=ax, with_labels=True, node_size=node_size,
-            node_color=node_colors, font_size=10, font_weight='bold',
-            arrows=True, arrowsize=15, edge_color=edge_colors,
+            node_color=node_colors, font_size=15, font_weight='bold',
+            arrows=True, arrowsize=35, edge_color=edge_colors,
             width=edge_widths, connectionstyle="arc3,rad=0.2")
             
     return G
 
 
+if __name__ == "__main__":
+    # Test cases with different weight configurations
+    test_weights_list = [
+        [126, -125, -56, 107, 105, -126, 100, -11, 175],
+        [153, -159, -32, 19, -14, -45, -101, -32, 42],
+        [15, -94, -27, -4, 100, -90, -85, -13, 30],
+        [150, -162, 145, 19, -20, 10, -104, -29, 65],
+        [1, -166, 119, -87, 58, -85, -111, -60, 78],
+        [155, -200, 73, -49, 100, -103, -127, -19, 27]
+    ]
 
+    # Grid layout parameters
+    node_size = 200
+    max_cols = 3  # Reduced to fit both motif and somite plots side by side
+    n_plots = len(test_weights_list)
+    n_cols = min(max_cols, n_plots)
+    n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)  # Double rows to fit somite plots
 
-# Test cases with different weight configurations
-test_weights_list = [
-    [126, -125, -56, 107, 105, -126, 100, -11, 175],
-    [153, -159, -32, 19, -14, -45, -101, -32, 42],
-    [15, -94, -27, -4, 100, -90, -85, -13, 30],
-    [150, -162, 145, 19, -20, 10, -104, -29, 65],
-    [1, -166, 119, -87, 58, -85, -111, -60, 78],
-    [155, -200, 73, -49, 100, -103, -127, -19, 27]
-]
+    # Create figure with dynamic grid size
+    fig_width = 8  # Width per subplot
+    fig_height = 6  # Height per subplot
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_width * n_cols, fig_height * n_rows))
+    fig.suptitle("Network Motifs and Somite Patterns", fontsize=16)
 
-# Grid layout parameters
-node_size = 200
-max_cols = 3  # Reduced to fit both motif and somite plots side by side
-n_plots = len(test_weights_list)
-n_cols = min(max_cols, n_plots)
-n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)  # Double rows to fit somite plots
+    # Plot each test case with its corresponding somite pattern
+    for idx, weights in enumerate(test_weights_list):
+        col = idx % max_cols
+        row = 2 * (idx // max_cols)  # Multiply by 2 to leave space for somite plots
+        
+        # Draw the network motif
+        G = draw_network_motif(weights, ax=axs[row, col], node_size=node_size)
+        w11, w12, w13, w21, w22, w23, w31, w32, w33 = weights
+        title = f"\n\nMotif {idx+1}\nw11={w11}, w12={w12}, w13={w13}\nw21={w21}, w22={w22}, w23={w23}\nw31={w31}, w32={w32}, w33={w33}\n\n"
+        axs[row, col].set_title(title, fontsize=8)
+        axs[row, col].set_aspect('equal')
+        
+        # Draw the somite pattern below the motif
+        reward = somitogenesis_reward_func(weights, plot=True, ax=axs[row+1, col])
+        axs[row+1, col].set_title(f"Somite Pattern (reward: {reward})", fontsize=8)
 
-# Create figure with dynamic grid size
-fig_width = 8  # Width per subplot
-fig_height = 6  # Height per subplot
-fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_width * n_cols, fig_height * n_rows))
-fig.suptitle("Network Motifs and Somite Patterns", fontsize=16)
+    # Remove axes for empty subplots
+    total_plots = len(test_weights_list)
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if (i//2) * max_cols + j >= total_plots:
+                axs[i, j].axis('off')
 
-# Plot each test case with its corresponding somite pattern
-for idx, weights in enumerate(test_weights_list):
-    col = idx % max_cols
-    row = 2 * (idx // max_cols)  # Multiply by 2 to leave space for somite plots
-    
-    # Draw the network motif
-    G = draw_network_motif(weights, ax=axs[row, col], node_size=node_size)
-    w11, w12, w13, w21, w22, w23, w31, w32, w33 = weights
-    title = f"\n\nMotif {idx+1}\nw11={w11}, w12={w12}, w13={w13}\nw21={w21}, w22={w22}, w23={w23}\nw31={w31}, w32={w32}, w33={w33}\n\n"
-    axs[row, col].set_title(title, fontsize=8)
-    axs[row, col].set_aspect('equal')
-    
-    # Draw the somite pattern below the motif
-    reward = somitogenesis_reward_func(weights, plot=True, ax=axs[row+1, col])
-    axs[row+1, col].set_title(f"Somite Pattern (reward: {reward})", fontsize=8)
-
-# Remove axes for empty subplots
-total_plots = len(test_weights_list)
-for i in range(n_rows):
-    for j in range(n_cols):
-        if (i//2) * max_cols + j >= total_plots:
-            axs[i, j].axis('off')
-
-plt.tight_layout()
-plt.savefig("network_motifs_and_somites_grid.png")
-plt.close()
-
+    plt.tight_layout()
+    plt.savefig(f"network_motifs_and_somites_grid_{int(time.time())}.png")
+    plt.close()
 
 

@@ -199,7 +199,7 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_dims', type=int, default=2) 
     argparser.add_argument('--n_dims', type=int, default=9)
     # argparser.add_argument('--n_steps', type=int, default=2)
-    argparser.add_argument('--n_steps', type=int, default=55) # 11*9  
+    argparser.add_argument('--n_steps', type=int, default=55) # 11*9 vs 8*9
     # argparser.add_argument('--actions_per_dim', type=list, default=[1, -1])
     argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
 
