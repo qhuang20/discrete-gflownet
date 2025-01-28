@@ -133,31 +133,31 @@ with open(output_path, 'w') as f:
 
     
     
-    """By count"""
-    f.write("\n" + "-" * 30 + "\n")
-    f.write(f"Top {TOP_N} by Count:\n")
-    f.write("-" * 30 + "\n")
+    # """By count"""
+    # f.write("\n" + "-" * 30 + "\n")
+    # f.write(f"Top {TOP_N} by Count:\n")
+    # f.write("-" * 30 + "\n")
 
-    top_count_states = sorted(
-        ep_last_state_counts.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )[:TOP_N]
+    # top_count_states = sorted(
+    #     ep_last_state_counts.items(),
+    #     key=lambda x: x[1],
+    #     reverse=True
+    # )[:TOP_N]
 
-    for state, count in top_count_states:
-        trajectories = ep_last_state_trajectories[state]
-        terminal_reward = trajectories[0]['rewards'][-1][0]
-        avg_reward = state_avg_rewards[state]
+    # for state, count in top_count_states:
+    #     trajectories = ep_last_state_trajectories[state]
+    #     terminal_reward = trajectories[0]['rewards'][-1][0]
+    #     avg_reward = state_avg_rewards[state]
         
-        f.write(f"State: {state}, Count: {count}, Terminal reward: {terminal_reward:.3f}, Avg trajectory reward: {avg_reward:.3f}\n")
+    #     f.write(f"State: {state}, Count: {count}, Terminal reward: {terminal_reward:.3f}, Avg trajectory reward: {avg_reward:.3f}\n")
         
-        # Write each trajectory and its average reward
-        for traj in trajectories:
-            rewards = [r[0] for r in traj['rewards']]
-            states = traj['states']
-            traj_avg = sum(rewards) / len(rewards)
-            f.write(f"Trajectory state-reward pairs: {[(states[i], f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
-        f.write("\n")
+    #     # Write each trajectory and its average reward
+    #     for traj in trajectories:
+    #         rewards = [r[0] for r in traj['rewards']]
+    #         states = traj['states']
+    #         traj_avg = sum(rewards) / len(rewards)
+    #         f.write(f"Trajectory state-reward pairs: {[(states[i], f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
+    #     f.write("\n")
 
 
 
