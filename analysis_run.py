@@ -64,6 +64,7 @@ print(f"- Shape of rewards: {np.array(trajectories[0]['rewards']).shape}")
 
 
 
+
 """Plot and save loss curve"""
 title = f"Loss and Z for the Model"
 plot_loss_curve(losses, zs=zs, title=title, save_dir=os.path.dirname(checkpoint_path))
@@ -87,8 +88,11 @@ for i, (step, last_state, traj) in enumerate(sorted_trajectories[:10]):
     print(f"{i}. Step: {step}, Last state: {last_state}")
 
 modes_dict = {}  # Dictionary to store modes and their info
+modes_set = set()  # Set for faster membership testing
 mode_list = []   # List to maintain order of discovery
 top_modes_avg_rewards = []
+top_k_rewards = []  # Min-heap to store top-k rewards
+
 BATCH_SIZE = 512  # Process trajectories in batches for efficiency
 for i in range(0, len(sorted_trajectories), BATCH_SIZE):
     batch = sorted_trajectories[i:i + BATCH_SIZE]
@@ -112,19 +116,23 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
         # Process high reward states
         for state, reward in zip(high_reward_states, high_rewards):
             state_tuple = tuple(state)
-            if state_tuple in modes_dict:
+            
+            if state_tuple in modes_set:
                 continue
                 
+            modes_set.add(state_tuple)
             modes_dict[state_tuple] = {
                 'reward': reward,
                 'step': training_step
             }
             mode_list.append(state_tuple)
             
-            # Update top-k average rewards using vectorized operations
-            rewards_array = np.array([modes_dict[m]['reward'] for m in mode_list])
-            k = min(len(mode_list), args.top_k)
-            top_k_rewards = -np.partition(-rewards_array, k-1)[:k]  # Faster than heapq
+            # Efficient rolling top-k update using min-heap
+            if len(top_k_rewards) < args.top_k:
+                heapq.heappush(top_k_rewards, reward)
+            elif reward > top_k_rewards[0]:
+                heapq.heapreplace(top_k_rewards, reward)
+                
             top_modes_avg_rewards.append(np.mean(top_k_rewards))
 
 end_time = time.time()
