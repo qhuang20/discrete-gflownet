@@ -89,7 +89,7 @@ for i, (step, last_state, traj) in enumerate(sorted_trajectories[:10]):
 modes_dict = {}  # Dictionary to store modes and their info
 mode_list = []   # List to maintain order of discovery
 top_modes_avg_rewards = []
-BATCH_SIZE = 1024  # Process trajectories in batches for efficiency
+BATCH_SIZE = 512  # Process trajectories in batches for efficiency
 for i in range(0, len(sorted_trajectories), BATCH_SIZE):
     batch = sorted_trajectories[i:i + BATCH_SIZE]
     
@@ -112,7 +112,6 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
         # Process high reward states
         for state, reward in zip(high_reward_states, high_rewards):
             state_tuple = tuple(state)
-            
             if state_tuple in modes_dict:
                 continue
                 
