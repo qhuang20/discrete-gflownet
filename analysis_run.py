@@ -5,6 +5,7 @@ import datetime
 import pickle
 from argparse import ArgumentParser
 from pathlib import Path
+import heapq
 
 import numpy as np   
 import torch
@@ -31,26 +32,21 @@ from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somi
 
 
 
-
 # Parse command line arguments
 parser = ArgumentParser()
 parser.add_argument('--run_dir', type=str, required=True, help='Directory containing checkpoint file')
 parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of trajectory to animate')
 parser.add_argument('--reward_threshold', type=float, default=0.1, help='Reward threshold for mode counting')
-parser.add_argument('--similarity_threshold', type=float, default=0.99, help='Similarity threshold for mode counting')
 parser.add_argument('--top_k', type=int, default=10, help='Number of top states to track')
 args = parser.parse_args()
 
 # Load checkpoint
 checkpoint_path = f"runs/{args.run_dir}/checkpoint.pt"  # checkpoint_interrupted 
 checkpoint = torch.load(checkpoint_path)
-
 losses = checkpoint['losses']
 zs = checkpoint['zs']
 ep_last_state_counts = checkpoint['ep_last_state_counts']
 ep_last_state_trajectories = checkpoint['ep_last_state_trajectories']
-
-
 
 # Print shape information
 print("Shape of ep_last_state_trajectories:")
@@ -66,6 +62,8 @@ print(f"- Shape of rewards: {np.array(trajectories[0]['rewards']).shape}")
 
 
 
+
+
 """Plot and save loss curve"""
 title = f"Loss and Z for the Model"
 plot_loss_curve(losses, zs=zs, title=title, save_dir=os.path.dirname(checkpoint_path))
@@ -76,113 +74,71 @@ print("The final Z (partition function) estimate is {:.2f}".format(zs[-1]))
 
 
 
-
-"""Mode counting and top rewards tracking - Optimized Version with cKDTree"""
+"""Mode counting and top rewards tracking - Simple Version with Reward Threshold"""
 start_time = time.time()
 
-sorted_trajectories = []  # sort by training step
-for last_state, trajectories in ep_last_state_trajectories.items():
-    for traj in trajectories:
-        sorted_trajectories.append((traj['training_step'], last_state, traj))
+# Convert trajectories to numpy arrays for faster processing
+sorted_trajectories = [(traj['training_step'], last_state, traj) 
+                      for last_state, trajectories in ep_last_state_trajectories.items()
+                      for traj in trajectories]
 sorted_trajectories.sort(key=lambda x: x[0])
+print("\nFirst 10 sorted trajectories:")
+for i, (step, last_state, traj) in enumerate(sorted_trajectories[:10]):
+    print(f"{i}. Step: {step}, Last state: {last_state}")
 
-# Initialize data structures for mode tracking
 modes_dict = {}  # Dictionary to store modes and their info
 mode_list = []   # List to maintain order of discovery
 top_modes_avg_rewards = []
-tree = None  # Initialize cKDTree as None
-
-# Process trajectories in batches for efficiency
-BATCH_SIZE = 1024
+BATCH_SIZE = 1024  # Process trajectories in batches for efficiency
 for i in range(0, len(sorted_trajectories), BATCH_SIZE):
     batch = sorted_trajectories[i:i + BATCH_SIZE]
     
-    # Process each trajectory in the batch
-    for training_step, last_state, traj in batch:
-        rewards = np.array([r[0] for r in traj['rewards']])
-        states = np.array(traj['states'])
-        
-        # Filter states by reward threshold
-        mask = rewards > args.reward_threshold
-        high_reward_states = states[mask]
-        high_rewards = rewards[mask]
+    # Vectorized processing of batch
+    batch_rewards = np.array([np.array([r[0] for r in traj[2]['rewards']]) for traj in batch])
+    batch_states = np.array([np.array(traj[2]['states']) for traj in batch])
+    batch_steps = np.array([traj[0] for traj in batch])
+    
+    # Filter states by reward threshold using vectorized operations
+    mask = batch_rewards > args.reward_threshold
+    
+    for b_idx in range(len(batch)):
+        high_reward_states = batch_states[b_idx][mask[b_idx]]
+        high_rewards = batch_rewards[b_idx][mask[b_idx]]
+        training_step = batch_steps[b_idx]
         
         if len(high_reward_states) == 0:
             continue
             
-        # Process each high reward state
+        # Process high reward states
         for state, reward in zip(high_reward_states, high_rewards):
             state_tuple = tuple(state)
             
             if state_tuple in modes_dict:
                 continue
                 
-            if len(modes_dict) == 0:
-                modes_dict[state_tuple] = {
-                    'reward': reward,
-                    'step': training_step
-                }
-                mode_list.append(state_tuple)
-                # Add initial top-k average reward
-                rewards_list = [modes_dict[m]['reward'] for m in mode_list]
-                top_k_rewards = sorted(rewards_list, reverse=True)[:min(len(mode_list), args.top_k)]
-                top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
-                continue
+            modes_dict[state_tuple] = {
+                'reward': reward,
+                'step': training_step
+            }
+            mode_list.append(state_tuple)
             
-            # Use cKDTree for efficient similarity search when modes > 1.. TODO
-            if len(modes_dict) > 1: 
-                if tree is None:
-                    # Initialize tree with existing modes
-                    existing_modes = np.array([list(m) for m in mode_list])
-                    tree = cKDTree(existing_modes)
-                    
-                # Query the tree for nearest neighbors
-                distances, _ = tree.query(state.reshape(1, -1), k=1)
-                similarity = np.exp(-distances[0])  # Converts euclidean distance into a decaying similarity score [0,1]
-                
-                if similarity <= args.similarity_threshold:
-                    modes_dict[state_tuple] = {
-                        'reward': reward,
-                        'step': training_step
-                    }
-                    mode_list.append(state_tuple)
-                    # Rebuild tree with new mode
-                    existing_modes = np.array([list(m) for m in mode_list])
-                    tree = cKDTree(existing_modes)
-                    
-                    # Update top-k average rewards
-                    rewards_list = [modes_dict[m]['reward'] for m in mode_list]
-                    top_k_rewards = sorted(rewards_list, reverse=True)[:min(len(mode_list), args.top_k)]
-                    top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
-            else:
-                # Use original cosine similarity for smaller number of modes
-                state_array = np.array(state).reshape(1, -1)
-                existing_modes = np.array([list(m) for m in mode_list])
-                similarities = cosine_similarity(state_array, existing_modes)[0]
-                
-                if not np.any(similarities > args.similarity_threshold):
-                    modes_dict[state_tuple] = {
-                        'reward': reward,
-                        'step': training_step
-                    }
-                    mode_list.append(state_tuple)
-                    # Update top-k average rewards
-                    rewards_list = [modes_dict[m]['reward'] for m in mode_list]
-                    top_k_rewards = sorted(rewards_list, reverse=True)[:min(len(mode_list), args.top_k)]
-                    top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
+            # Update top-k average rewards using vectorized operations
+            rewards_array = np.array([modes_dict[m]['reward'] for m in mode_list])
+            k = min(len(mode_list), args.top_k)
+            top_k_rewards = -np.partition(-rewards_array, k-1)[:k]  # Faster than heapq
+            top_modes_avg_rewards.append(np.mean(top_k_rewards))
 
 end_time = time.time()
 print(f"\nMode counting took {end_time - start_time:.2f} seconds")
-print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold} "
-      f"and similarity threshold {args.similarity_threshold}")
+print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}")
 
 # Plot mode discovery and top-k average rewards
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
 
-discovery_steps = [modes_dict[m]['step'] for m in mode_list]
+discovery_steps = np.array([modes_dict[m]['step'] for m in mode_list])
 
 # Mode discovery plot
-ax1.plot(discovery_steps, range(1, len(modes_dict) + 1), '-o')
+ax1.plot(discovery_steps, np.arange(1, len(modes_dict) + 1), '-o')
 ax1.set_xlabel('Training Step')
 ax1.set_ylabel('Number of Modes Found')
 ax1.set_title('Mode Discovery Progress')
@@ -196,8 +152,9 @@ ax2.set_title(f'Top-{args.top_k} Modes Average Reward Progress')
 ax2.grid(True)
 
 plt.tight_layout()
-plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_and_rewards_discovery.png'))
+plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_plot_simple2.png'))
 plt.close()
+
 
 
 
@@ -217,8 +174,7 @@ with open(output_path, 'w') as f:
     f.write(f"Discovered Modes Information:\n")
     f.write("-" * 30 + "\n")
     f.write(f"Found {len(modes_dict)} distinct modes with:\n")
-    f.write(f"- Reward threshold: {args.reward_threshold}\n")
-    f.write(f"- Similarity threshold: {args.similarity_threshold}\n\n")
+    f.write(f"- Reward threshold: {args.reward_threshold}\n\n")
     
     for i, mode in enumerate(mode_list, 1):
         info = modes_dict[mode]
@@ -337,9 +293,6 @@ with open(output_path, 'w') as f:
 
 
     
-
-
-
 
 
 
