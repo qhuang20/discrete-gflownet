@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_trajectories):
+def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_trajectories, training_step):
     """Track unique state distribution and trajectory rewards"""
     batch_ss, batch_as, batch_steps, batch_rs = batch_data
     
@@ -44,7 +44,8 @@ def track_trajectories(batch_data, env, ep_last_state_counts, ep_last_state_traj
         trajectory = {
             'states': ep_states,
             'actions': ep_actions,
-            'rewards': padded_rewards
+            'rewards': padded_rewards,
+            'training_step': training_step
         }
         ep_last_state_trajectories[env_state].append(trajectory)
         
