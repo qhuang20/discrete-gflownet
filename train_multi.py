@@ -52,7 +52,7 @@ def run_experiment(n_dims):
 
 def main():
     # Define experiments
-    n_dims_list = [9, 25, 49, 81]
+    n_dims_list = [9, 25, 49, 81, 225, 441]
     
     # Number of parallel processes (adjust based on CPU cores)
     n_processes = min(len(n_dims_list), os.cpu_count())
