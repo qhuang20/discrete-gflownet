@@ -133,7 +133,8 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
             elif reward > top_k_rewards[0]:
                 heapq.heapreplace(top_k_rewards, reward)
                 
-            top_modes_avg_rewards.append(np.mean(top_k_rewards))
+            # top_modes_avg_rewards.append(np.mean(top_k_rewards))
+            top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
 
 end_time = time.time()
 print(f"\nMode counting took {end_time - start_time:.2f} seconds")
@@ -159,7 +160,7 @@ ax2.set_title(f'Top-{args.top_k} Modes Average Reward Progress')
 ax2.grid(True)
 
 plt.tight_layout()
-plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_plot_simple2.png'))
+plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_and_rewards_discovery.png'))
 plt.close()
 
 
@@ -187,6 +188,8 @@ with open(output_path, 'w') as f:
         info = modes_dict[mode]
         f.write(f"Mode {i}:\n")
         f.write(f"- State: {list(mode)}\n")
+        f.write(f"- Reward: {info['reward']:.3f}\n")
+        f.write(f"- Top-{args.top_k} modes avg reward so far: {top_modes_avg_rewards[i-1]:.3f}\n")
         f.write(f"- Discovered at step: {info['step']}\n")
     f.write("\n")
     
