@@ -64,7 +64,7 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
     pos = nx.circular_layout(G)
     nx.draw(G, pos, ax=ax, with_labels=True, node_size=node_size,
             node_color=node_colors, font_size=15, font_weight='bold',
-            arrows=True, arrowsize=35, edge_color=edge_colors,
+            arrows=True, arrowsize=15, edge_color=edge_colors,
             width=edge_widths, connectionstyle="arc3,rad=0.2")
             
     return G
@@ -78,7 +78,8 @@ if __name__ == "__main__":
         [15, -94, -27, -4, 100, -90, -85, -13, 30],
         [150, -162, 145, 19, -20, 10, -104, -29, 65],
         [1, -166, 119, -87, 58, -85, -111, -60, 78],
-        [155, -200, 73, -49, 100, -103, -127, -19, 27]
+        [155, -200, 73, -49, 100, -103, -127, -19, 27],
+        [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
     ]
 
     # Grid layout parameters
@@ -101,8 +102,16 @@ if __name__ == "__main__":
         
         # Draw the network motif
         G = draw_network_motif(weights, ax=axs[row, col], node_size=node_size)
-        w11, w12, w13, w21, w22, w23, w31, w32, w33 = weights
-        title = f"\n\nMotif {idx+1}\nw11={w11}, w12={w12}, w13={w13}\nw21={w21}, w22={w22}, w23={w23}\nw31={w31}, w32={w32}, w33={w33}\n\n"
+        
+        # Create title showing weights in matrix form
+        num_nodes = int(np.sqrt(len(weights)))
+        weight_matrix = np.array(weights[:num_nodes*num_nodes]).reshape(num_nodes, num_nodes)
+        title = f"\n\nMotif {idx+1}\n"
+        # Print weight matrix with fixed width formatting
+        for i in range(num_nodes):
+            row_str = "  ".join([f"{weight_matrix[i,j]:<6d}" for j in range(num_nodes)])
+            title += f"{row_str}\n"
+        
         axs[row, col].set_title(title, fontsize=8)
         axs[row, col].set_aspect('equal')
         
