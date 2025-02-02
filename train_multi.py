@@ -15,13 +15,13 @@ def run_experiment(n_dims):
         "train.py",
         "--mbsize", "8",
         "--envsize", "8", 
-        "--method", "tb",
+        "--method", "fldb",
         "--n_workers", "1",
         "--n_hid", "256",
         "--n_layers", "3",
         "--explore_ratio", "0.35",
-        "--n_steps", "15",  
-        "--n_train_steps", "1000",
+        "--n_steps", "55",  
+        "--n_train_steps", "6000",
         "--n_dims", str(n_dims),
     ]
     
@@ -52,7 +52,7 @@ def run_experiment(n_dims):
 
 def main():
     # Define experiments
-    n_dims_list = [9, 25, 49, 81, 225, 441]
+    n_dims_list = [9, 25]  # [9, 25, 49, 81, 225, 441] 
     
     # Number of parallel processes (adjust based on CPU cores)
     n_processes = min(len(n_dims_list), os.cpu_count())
