@@ -27,7 +27,7 @@ from disc_gflownet.envs.grid_env import GridEnv
 from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
-from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
+from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func, state_to_matrix_transformation
 
 
 
@@ -38,7 +38,7 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
         ax = plt.gca()
         
     num_nodes = int(np.sqrt(len(state)))
-    weight_matrix = np.array(state).reshape(num_nodes, num_nodes)    
+    weight_matrix = state_to_matrix_transformation(state)
     G = nx.DiGraph()
     node_colors = plt.cm.rainbow(np.linspace(0, 1, num_nodes)) # Generate evenly spaced colors for nodes
     G.add_nodes_from(range(1, num_nodes + 1))
@@ -70,18 +70,14 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
     return G
 
 
-if __name__ == "__main__":
-    # Test cases with different weight configurations
-    test_weights_list = [
-        [126, -125, -56, 107, 105, -126, 100, -11, 175],
-        [153, -159, -32, 19, -14, -45, -101, -32, 42],
-        [15, -94, -27, -4, 100, -90, -85, -13, 30],
-        [150, -162, 145, 19, -20, 10, -104, -29, 65],
-        [1, -166, 119, -87, 58, -85, -111, -60, 78],
-        [155, -200, 73, -49, 100, -103, -127, -19, 27],
-        [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
-    ]
-
+def plot_network_motifs_and_somites(test_weights_list, save_path=None):
+    """
+    Plot network motifs and their corresponding somite patterns in a grid layout.
+    
+    Args:
+        test_weights_list (list): List of weight configurations to visualize
+        save_path (str, optional): Path to save the figure. If None, timestamp will be used
+    """
     # Grid layout parameters
     node_size = 200
     max_cols = 3  # Reduced to fit both motif and somite plots side by side
@@ -95,6 +91,12 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_width * n_cols, fig_height * n_rows))
     fig.suptitle("Network Motifs and Somite Patterns", fontsize=16)
 
+    # Handle single row/column cases
+    if n_rows == 1:
+        axs = np.array([axs])
+    if n_cols == 1:
+        axs = np.array([axs]).T
+
     # Plot each test case with its corresponding somite pattern
     for idx, weights in enumerate(test_weights_list):
         col = idx % max_cols
@@ -105,7 +107,7 @@ if __name__ == "__main__":
         
         # Create title showing weights in matrix form
         num_nodes = int(np.sqrt(len(weights)))
-        weight_matrix = np.array(weights[:num_nodes*num_nodes]).reshape(num_nodes, num_nodes)
+        weight_matrix = state_to_matrix_transformation(weights)
         title = f"\n\nMotif {idx+1}\n"
         # Print weight matrix with fixed width formatting
         for i in range(num_nodes):
@@ -127,7 +129,30 @@ if __name__ == "__main__":
                 axs[i, j].axis('off')
 
     plt.tight_layout()
-    plt.savefig(f"network_motifs_and_somites_grid_{int(time.time())}.png")
+    
+    if save_path is None:
+        save_path = f"graph/network_motifs_and_somites_grid_{int(time.time())}.png"
+    plt.savefig(save_path)
     plt.close()
+    
+    return save_path
+
+
+if __name__ == "__main__":
+    # Example usage
+    test_weights_list = [
+        [126, -125, -56, 107, 105, -126, 100, -11, 175],
+        [153, -159, -32, 19, -14, -45, -101, -32, 42],
+        [15, -94, -27, -4, 100, -90, -85, -13, 30],
+        [150, -162, 145, 19, -20, 10, -104, -29, 65],
+        [1, -166, 119, -87, 58, -85, -111, -60, 78],
+        [155, -200, 73, -49, 100, -103, -127, -19, 27],
+        [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+    ]
+    
+    plot_network_motifs_and_somites(test_weights_list)
+
+
+
 
 

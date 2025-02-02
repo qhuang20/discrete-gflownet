@@ -15,9 +15,81 @@ def coord_reward_func(state):
 
 
 
+
+
+
+
+
+# helpers for oscillator and somite
+
 def sigmoid(z):
     """Sigmoid activation function with overflow protection"""
     return 1 / (1 + np.exp(-np.clip(z, -5000, 5000)))
+
+
+
+def state_to_matrix_transformation(state, plot=False, ax=None):
+    """
+    Transform state vector to matrix following specific pattern:
+    1 node: [w1] -> [[w1]]
+    2 node: [w1,w2,w3,w4] -> [[w1,w4],[w3,w2]]
+    3 node: [w1,w2,w3,w4,w5,w6,w7,w8,w9] -> [[w1,w4,w7],[w3,w2,w9],[w6,w8,w5]]
+    
+    The transformation preserves inner matrix structure when going from n to n+1 nodes,
+    with new weights added in specific positions.
+    
+    Returns an integer weight matrix.
+    """
+    # Infer number of nodes from state length
+    n_nodes = int(np.sqrt(len(state)))
+    assert n_nodes * n_nodes == len(state), "State length must be a perfect square"
+    
+    if n_nodes == 1:
+        return np.array([[int(state[0])]], dtype=np.int32)
+        
+    # Initialize matrix with zeros
+    W_matrix = np.zeros((n_nodes, n_nodes), dtype=np.int32)
+    
+    # Base case for 2x2
+    if n_nodes == 2:
+        W_matrix[0,0] = state[0]  # w1
+        W_matrix[1,1] = state[1]  # w2
+        W_matrix[1,0] = state[2]  # w3
+        W_matrix[0,1] = state[3]  # w4
+        return W_matrix
+        
+    # For larger matrices, first copy the (n-1)x(n-1) inner matrix
+    prev_size = n_nodes - 1
+    prev_matrix = state_to_matrix_transformation(state[:prev_size*prev_size])
+    
+    # Copy previous matrix to top-left corner
+    W_matrix[:prev_size, :prev_size] = prev_matrix
+    
+    # Add new weights for nth node
+    start_idx = prev_size * prev_size  # Start index for new weights
+    
+    # First place diagonal element
+    W_matrix[n_nodes-1, n_nodes-1] = state[start_idx]
+    
+    # Fill rest of last row and column alternating between row and column entries
+    curr_idx = start_idx + 1
+    for i in range(n_nodes-1):
+        # Fill matrix entry W_x,i
+        W_matrix[n_nodes-1, i] = state[curr_idx]
+        curr_idx += 1
+        # Fill matrix entry W_i,x
+        W_matrix[i, n_nodes-1] = state[curr_idx]
+        curr_idx += 1
+        
+    return W_matrix
+
+
+
+
+
+
+
+
 
 
 
@@ -103,6 +175,8 @@ def oscillator_reward_func(weights, plot=False):
 
 
 
+
+
 def somitogenesis_reward_func(state, plot=False, ax=None):
     """
     Calculate reward based on gene expression pattern simulation.
@@ -153,7 +227,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
 
     def simulate_system(weights):
         """Simulate with optimized matrix operations"""
-        W = np.array(weights).reshape(n_nodes, n_nodes) / WEIGHT_SCALE
+        # W = np.array(weights).reshape(n_nodes, n_nodes) / WEIGHT_SCALE
+        W = state_to_matrix_transformation(weights) / WEIGHT_SCALE
         t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
         
         sol = solve_ivp(
@@ -167,6 +242,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         )
         return t, sol.y.T.reshape(len(t), N_CELLS, n_nodes)
 
+    
+    
     def count_boundaries(concentrations):
         """Count boundaries with minimum distance between them"""
         n_boundaries = 0
@@ -227,5 +304,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         plot_heatmap(x1_concentration, t, ax)
     
     return calculate_reward(x1_concentration)
+
+
 
 
