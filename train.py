@@ -166,18 +166,18 @@ if __name__ == '__main__':
     argparser.add_argument('--device', type=str, default='cpu')
     argparser.add_argument('--progress', type=bool, default=True)
     argparser.add_argument('--seed', type=int, default=42) 
-    argparser.add_argument('--n_train_steps', type=int, default=1000) 
-    # argparser.add_argument('--n_train_steps', type=int, default=6000) 
+    # argparser.add_argument('--n_train_steps', type=int, default=1000) 
+    argparser.add_argument('--n_train_steps', type=int, default=6000) 
     argparser.add_argument('--n_workers', type=int, default=1) 
     argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
-    argparser.add_argument('--log_freq', type=int, default=200)
     # argparser.add_argument('--log_freq', type=int, default=100) 
+    argparser.add_argument('--log_freq', type=int, default=1000) 
     argparser.add_argument('--log_flag', type=bool, default=True)
     argparser.add_argument('--mbsize', type=int, default=8)
     
     # Model 
-    argparser.add_argument('--method', type=str, default='tb') 
-    # argparser.add_argument('--method', type=str, default='fldb') 
+    # argparser.add_argument('--method', type=str, default='tb') 
+    argparser.add_argument('--method', type=str, default='fldb') 
     # argparser.add_argument('--explore_ratio', type=float, default=0.06) 
     argparser.add_argument('--explore_ratio', type=float, default=0.35) 
     argparser.add_argument('--learning_rate', type=float, default=1e-3)
@@ -190,19 +190,19 @@ if __name__ == '__main__':
     
     # Environment 
     argparser.add_argument('--envsize', type=int, default=8)
-    argparser.add_argument('--min_reward', type=float, default=1e-3)  
     # argparser.add_argument('--min_reward', type=float, default=1e-6)
+    argparser.add_argument('--min_reward', type=float, default=1e-3)  
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=coord_reward_func) 
-    argparser.add_argument('--grid_bound', type=int, default=10)
-    # argparser.add_argument('--grid_bound', type=int, default=200)
+    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
+    # argparser.add_argument('--grid_bound', type=int, default=10)
+    argparser.add_argument('--grid_bound', type=int, default=200)
     # argparser.add_argument('--n_dims', type=int, default=2) 
     argparser.add_argument('--n_dims', type=int, default=9)
-    argparser.add_argument('--n_steps', type=int, default=35) 
-    # argparser.add_argument('--n_steps', type=int, default=55) # 11*9 vs 8*9
-    argparser.add_argument('--actions_per_dim', type=list, default=[1])
-    # argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
+    # argparser.add_argument('--n_steps', type=int, default=35) 
+    argparser.add_argument('--n_steps', type=int, default=55) # 11*9 vs 8*9
+    # argparser.add_argument('--actions_per_dim', type=list, default=[1])
+    argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
 
     args = argparser.parse_args()
 
