@@ -4,6 +4,7 @@ data/
 runs/
 output/
 .DS_Store
+nohup.out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

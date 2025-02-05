@@ -24,14 +24,7 @@ class GridEnv(BaseEnv):
         self.grid_bound = args.grid_bound
         self.enable_time = args.enable_time
         self.consistent_signs = args.consistent_signs # New flag to enforce consistent signs per dimension
-        
-        # Calculate bits needed for each dimension
-        if self.has_mixed_actions:
-            self.bits_per_dim = int(np.ceil(np.log2(2 * self.grid_bound + 1)))
-        else:
-            self.bits_per_dim = int(np.ceil(np.log2(self.grid_bound + 1)))
-            
-        base_encoding_dim = self.bits_per_dim * self.n_dims
+        base_encoding_dim = (2 * self.grid_bound + 1) * self.n_dims if self.has_mixed_actions else (self.grid_bound + 1) * self.n_dims
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
     
     def print_actions(self):
@@ -45,46 +38,45 @@ class GridEnv(BaseEnv):
         print([f"({i}): {name}" for i, name in enumerate(action_names)])
         print("-"*42)   
     
-    def _int_to_gray(self, n):
-        """Convert an integer to Gray code"""
-        return n ^ (n >> 1)
-    
-    def _gray_to_int(self, n):
-        """Convert a Gray code back to integer"""
-        mask = n
-        while mask:
-            mask >>= 1
-            n ^= mask
-        return n
-    
     def state_to_encoding(self, state) -> np.ndarray:
-        encoding = []
+        # Unpack time and spatial state if time is enabled
+        if self.enable_time:
+            time_step, spatial_state = state
+        else:
+            spatial_state = state
+
+        # Convert state coordinates to one-hot encoding per dimension
+        one_hots = []
         
         # Add time encoding if enabled
         if self.enable_time:
-            time_step, spatial_state = state
             time_one_hot = np.zeros(self.n_steps + 1, dtype=int)
             time_one_hot[time_step] = 1
-            encoding.extend(time_one_hot)
-        else:
-            spatial_state = state
+            one_hots.append(time_one_hot)
             
-        # Convert each dimension to binary Gray code
+        # Encode spatial dimensions
         for dim_val in spatial_state:
-            # Shift value to be non-negative
-            if self.has_mixed_actions or self.only_negative_actions:
-                dim_val += self.grid_bound
-                
-            # Convert to Gray code
-            gray_val = self._int_to_gray(dim_val)
-            
-            # Convert to binary array
-            binary = [(gray_val >> i) & 1 for i in range(self.bits_per_dim)]
-            encoding.extend(binary)
-            
-        return np.array(encoding, dtype=int)
+            # Create a one-hot vector with appropriate size
+            if self.has_mixed_actions:
+                # For mixed actions, shift values to be 0-indexed
+                one_hot = np.zeros(2 * self.grid_bound + 1, dtype=int)
+                one_hot[dim_val + self.grid_bound] = 1
+            elif self.only_negative_actions:
+                # For negative actions, shift values to be 0-indexed
+                one_hot = np.zeros(self.grid_bound + 1, dtype=int)
+                one_hot[dim_val + self.grid_bound] = 1
+            else:
+                # For positive-only actions
+                one_hot = np.zeros(self.grid_bound + 1, dtype=int)
+                one_hot[dim_val] = 1
+            one_hots.append(one_hot)
+        return np.concatenate(one_hots)
 
     def encoding_to_state(self, encoding) -> np.ndarray:
+        # Convert one-hot encoding back to state coordinates
+        spatial_state = np.zeros(self.n_dims, dtype=np.int32)
+        dim_size = 2 * self.grid_bound + 1 if self.has_mixed_actions else self.grid_bound + 1
+        
         offset = 0
         time_step = 0
         
@@ -94,26 +86,23 @@ class GridEnv(BaseEnv):
             time_step = np.where(time_one_hot == 1)[0][0]
             offset = self.n_steps + 1
         
-        spatial_state = np.zeros(self.n_dims, dtype=np.int32)
-        
-        # Process each dimension
         for dim in range(self.n_dims):
-            # Extract bits for this dimension
-            start_idx = offset + dim * self.bits_per_dim
-            end_idx = start_idx + self.bits_per_dim
-            binary = encoding[start_idx:end_idx]
+            # Extract one-hot segment for this dimension
+            start_idx = offset + dim * dim_size
+            end_idx = start_idx + dim_size
+            one_hot_segment = encoding[start_idx:end_idx]
+            # Find the index of 1 in the one-hot segment
+            hot_idx = np.where(one_hot_segment == 1)[0][0]
             
-            # Convert binary array to integer
-            gray_val = sum(int(bit) * (1 << i) for i, bit in enumerate(binary))
-            
-            # Convert Gray code to regular binary
-            val = self._gray_to_int(gray_val)
-            
-            # Shift back if necessary
-            if self.has_mixed_actions or self.only_negative_actions:
-                val -= self.grid_bound
-                
-            spatial_state[dim] = val
+            if self.has_mixed_actions:
+                # Convert back from shifted index for mixed actions
+                spatial_state[dim] = hot_idx - self.grid_bound
+            elif self.only_negative_actions:
+                # Convert back from shifted index for negative actions
+                spatial_state[dim] = hot_idx - self.grid_bound
+            else:
+                # No shift needed for positive-only actions
+                spatial_state[dim] = hot_idx
                 
         return (time_step, spatial_state) if self.enable_time else spatial_state
     
@@ -193,7 +182,5 @@ class GridEnv(BaseEnv):
             reward = -1
             
         return self.obs(), reward, done
-
-
 
 

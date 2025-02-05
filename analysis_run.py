@@ -29,6 +29,7 @@ from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
+from graph.graph import plot_network_motifs_and_somites
 
 
 
@@ -38,6 +39,7 @@ parser.add_argument('--run_dir', type=str, required=True, help='Directory contai
 parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of trajectory to animate')
 parser.add_argument('--reward_threshold', type=float, default=0.1, help='Reward threshold for mode counting')
 parser.add_argument('--top_k', type=int, default=10, help='Number of top states to track')
+parser.add_argument('--top_m', type=int, default=12, help='Number of top states to show')
 args = parser.parse_args()
 
 # Load checkpoint
@@ -138,7 +140,7 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
 
 end_time = time.time()
 print(f"\nMode counting took {end_time - start_time:.2f} seconds")
-print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}")
+print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}\n\n")
 
 # Plot mode discovery and top-k average rewards
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
@@ -169,13 +171,13 @@ plt.close()
 
 
 
-"""Save modes information to file"""
+"""Save modes information to file and Plot top_m"""
 output_path = os.path.join(os.path.dirname(checkpoint_path), "analysis_results.txt")
-final_top_k = sorted(
+top_m = sorted(
     [(mode, info['reward']) for mode, info in modes_dict.items()],
     key=lambda x: x[1],
     reverse=True
-)[:args.top_k]
+)[:args.top_m]
 
 with open(output_path, 'w') as f:
     f.write("-" * 30 + "\n")
@@ -194,13 +196,22 @@ with open(output_path, 'w') as f:
     f.write("\n")
     
     f.write("-" * 30 + "\n")
-    f.write(f"Final Top-{args.top_k} Modes by Reward:\n")
+    f.write(f"Top-{args.top_m} Modes by Reward:\n")
     f.write("-" * 30 + "\n")
-    for i, (state, reward) in enumerate(final_top_k, 1):
+    for i, (state, reward) in enumerate(top_m, 1):
         f.write(f"Rank {i}:\n")
         f.write(f"- State: {list(state)}\n")
         f.write(f"- Reward: {reward:.3f}\n")
     f.write("\n")
+
+# Plot network motifs and somite patterns for top modes
+top_m_states = [list(state) for state, _ in top_m]
+motifs_plot_path = os.path.join(os.path.dirname(checkpoint_path), "top_modes_motifs_and_somites.png")
+plot_network_motifs_and_somites(top_m_states, save_path=motifs_plot_path)
+print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
+
+
+
 
 
 
