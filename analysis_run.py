@@ -123,9 +123,13 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
                 continue
                 
             modes_set.add(state_tuple)
+            # Store full trajectory info for this mode
+            trajectory = batch[b_idx][2]
             modes_dict[state_tuple] = {
                 'reward': reward,
-                'step': training_step
+                'step': training_step,
+                'states': trajectory['states'],
+                'rewards': [r[0] for r in trajectory['rewards']]
             }
             mode_list.append(state_tuple)
             
@@ -141,6 +145,12 @@ for i in range(0, len(sorted_trajectories), BATCH_SIZE):
 end_time = time.time()
 print(f"\nMode counting took {end_time - start_time:.2f} seconds")
 print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}\n\n")
+
+# Save all modes and their trajectories
+modes_save_path = os.path.join(os.path.dirname(checkpoint_path), "modes_with_trajectories.pkl")
+with open(modes_save_path, 'wb') as f:
+    pickle.dump(modes_dict, f)
+print(f"\nSaved all modes and their trajectories to: {modes_save_path}\n")
 
 # Plot mode discovery and top-k average rewards
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
@@ -209,7 +219,6 @@ top_m_states = [list(state) for state, _ in top_m]
 motifs_plot_path = os.path.join(os.path.dirname(checkpoint_path), "top_modes_motifs_and_somites.png")
 plot_network_motifs_and_somites(top_m_states, save_path=motifs_plot_path)
 print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
-
 
 
 
