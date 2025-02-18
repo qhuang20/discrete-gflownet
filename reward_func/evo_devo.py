@@ -208,7 +208,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     N_BOUNDARY_CHECKS = 3
     
     # Pre-compute initial conditions
-    x0 = np.full(N_CELLS * n_nodes, 0.1)  # Faster than tile
+    x0 = np.full(N_CELLS * n_nodes, 0.1)  # 0.1
     
     # Fixed parameters
     D = np.eye(n_nodes)  # Identity matrix for n_nodes
@@ -223,7 +223,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         x_reshaped = x.reshape(-1, n_nodes)
         g = np.minimum(np.exp(A * positions - B * t), 1)
         z = g * D_ONES + x_reshaped @ W.T
-        return (1 / (1 + np.exp(-z)) - x_reshaped).flatten()
+        return (1 / (1 + np.exp(-z)) - x_reshaped).flatten() # sigmoid(z)
 
     def simulate_system(weights):
         """Simulate with optimized matrix operations"""
