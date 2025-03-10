@@ -27,7 +27,33 @@ from disc_gflownet.envs.grid_env import GridEnv
 from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
-from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func, state_to_matrix_transformation
+from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func, weights_to_matrix
+
+
+def calculate_n_nodes_from_state(state):
+    # solve quadratic: n^2 + n - len(state) = 0
+    return int((-1 + (1 + 4*len(state))**0.5) / 2)
+
+
+def extract_network_parameters(state):
+    """
+    Extract weights, d_values, and s_values from the state vector.
+    
+    Args:
+        state: 1D array containing weights and other parameters
+        
+    Returns:
+        tuple: (weights, d_values, s_values, n_nodes, n_weights)
+    """
+    n_nodes = calculate_n_nodes_from_state(state)
+    n_weights = n_nodes * n_nodes
+    weights = state[:n_weights]
+    d_values = state[n_weights:n_weights+n_nodes]
+    # s_values = state[n_weights+n_nodes:]
+    s_values = [1.2, 0.8, 0.9]  # s values
+    
+    return weights, d_values, s_values, n_nodes, n_weights
+
 
 
 
@@ -37,17 +63,19 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
         plt.figure(figsize=(10, 10))
         ax = plt.gca()
         
-    num_nodes = int(np.sqrt(len(state)))
-    weight_matrix = state_to_matrix_transformation(state)
+    # Extract network parameters
+    weights, d_values, s_values, n_nodes, n_weights = extract_network_parameters(state)
+    
+    weight_matrix = weights_to_matrix(weights)
     G = nx.DiGraph()
-    node_colors = plt.cm.rainbow(np.linspace(0, 1, num_nodes)) # Generate evenly spaced colors for nodes
-    G.add_nodes_from(range(1, num_nodes + 1))
+    node_colors = plt.cm.rainbow(np.linspace(0, 1, n_nodes)) # Generate evenly spaced colors for nodes
+    G.add_nodes_from(range(1, n_nodes + 1))
     
     # Process edges and their properties
     edge_colors_dict = {}
     edge_widths_dict = {}
-    for i in range(num_nodes):
-        for j in range(num_nodes):
+    for i in range(n_nodes):
+        for j in range(n_nodes):
             if weight_matrix[i, j] != 0:
                 # Fix edge direction: if wij, node i points to node j
                 edge = (i + 1, j + 1)  # Changed from (j + 1, i + 1)
@@ -70,21 +98,21 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
     return G
 
 
-def plot_network_motifs_and_somites(test_weights_list, save_path=None):
+def plot_network_motifs_and_somites(test_states_list, save_path=None):
     """
     Plot network motifs and their corresponding somite patterns in a grid layout.
     
     Args:
-        test_weights_list (list): List of weight configurations to visualize
+        test_states_list (list): List of state configurations (weights + d_values + s_values) to visualize
         save_path (str, optional): Path to save the figure. If None, timestamp will be used
     """
     # Grid layout parameters
     node_size = 200
     max_cols = 3  # Reduced to fit both motif and somite plots side by side
-    n_plots = len(test_weights_list)
+    n_plots = len(test_states_list)
     n_cols = min(max_cols, n_plots)
     n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)  # Double rows to fit somite plots
-
+       
     # Create figure with dynamic grid size
     fig_width = 8  # Width per subplot
     fig_height = 6  # Height per subplot
@@ -98,31 +126,31 @@ def plot_network_motifs_and_somites(test_weights_list, save_path=None):
         axs = np.array([axs]).T
 
     # Plot each test case with its corresponding somite pattern
-    for idx, weights in enumerate(test_weights_list):
+    for idx, state in enumerate(test_states_list):
         col = idx % max_cols
         row = 2 * (idx // max_cols)  # Multiply by 2 to leave space for somite plots
         
         # Draw the network motif
-        G = draw_network_motif(weights, ax=axs[row, col], node_size=node_size)
+        G = draw_network_motif(state, ax=axs[row, col], node_size=node_size)
         
         # Create title showing weights in matrix form
-        num_nodes = int(np.sqrt(len(weights)))
-        weight_matrix = state_to_matrix_transformation(weights)
+        weights, _, _, n_nodes, _ = extract_network_parameters(state)
+        weight_matrix = weights_to_matrix(weights)
         title = f"\n\nMotif {idx+1}\n"
         # Print weight matrix with fixed width formatting
-        for i in range(num_nodes):
-            row_str = "  ".join([f"{weight_matrix[i,j]:<6d}" for j in range(num_nodes)])
+        for i in range(n_nodes):
+            row_str = "  ".join([f"{weight_matrix[i,j]:<6d}" for j in range(n_nodes)])
             title += f"{row_str}\n"
         
         axs[row, col].set_title(title, fontsize=8)
         axs[row, col].set_aspect('equal')
         
         # Draw the somite pattern below the motif
-        reward = somitogenesis_reward_func(weights, plot=True, ax=axs[row+1, col])
+        reward = somitogenesis_reward_func(state, plot=True, ax=axs[row+1, col])
         axs[row+1, col].set_title(f"Somite Pattern (reward: {reward})", fontsize=8)
 
     # Remove axes for empty subplots
-    total_plots = len(test_weights_list)
+    total_plots = len(test_states_list)
     for i in range(n_rows):
         for j in range(n_cols):
             if (i//2) * max_cols + j >= total_plots:
@@ -138,20 +166,23 @@ def plot_network_motifs_and_somites(test_weights_list, save_path=None):
     return save_path
 
 
+
+
+
+
 if __name__ == "__main__":
-    # Example usage
-    test_weights_list = [
-        [126, -125, -56, 107, 105, -126, 100, -11, 175],
-        [153, -159, -32, 19, -14, -45, -101, -32, 42],
-        [15, -94, -27, -4, 100, -90, -85, -13, 30],
-        [150, -162, 145, 19, -20, 10, -104, -29, 65],
-        [1, -166, 119, -87, 58, -85, -111, -60, 78],
-        [155, -200, 73, -49, 100, -103, -127, -19, 27],
-        [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+    # Example usage with full state vectors (weights + d_values + s_values)
+    test_states_list = [
+        # [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1],  # 3x3 weights + 3 d_values + 3 s_values
+        # [153, -159, -32, 19, -14, -45, -101, -32, 42, 1, 1, 1, 1, 1, 1],
+        # [15, -94, -27, -4, 100, -90, -85, -13, 30, 1, 1, 1, 1, 1, 1],
+        # [150, -162, 145, 19, -20, 10, -104, -29, 65, 1, 1, 1, 1, 1, 1],
+        # [1, -166, 119, -87, 58, -85, -111, -60, 78, 1, 1, 1, 1, 1, 1],
+        # [155, -200, 73, -49, 100, -103, -127, -19, 27, 1, 1, 1, 1, 1, 1],
+        # [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
     ]
     
-    plot_network_motifs_and_somites(test_weights_list)
-
+    plot_network_motifs_and_somites(test_states_list)
 
 
 

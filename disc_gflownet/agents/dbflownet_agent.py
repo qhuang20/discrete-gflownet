@@ -46,7 +46,7 @@ class DBFlowNetAgent(BaseAgent):
             episode_len = episode_lens[episode_idx]
             episode_states = batch_ss[episode_idx][:episode_len, :] 
             episode_actions = batch_as[episode_idx][:episode_len - 1, :] 
-            episode_trajectory_rewards = batch_rs[episode_idx].squeeze(-1)
+            episode_trajectory_rewards = batch_rs[episode_idx].squeeze(-1).to(self.dev) # move the reward to CUDA 
             episode_terminal_reward = episode_trajectory_rewards[-1] # terminal reward can also be set as the sum of trajectory rewards 
             pred = self.model(episode_states)
 

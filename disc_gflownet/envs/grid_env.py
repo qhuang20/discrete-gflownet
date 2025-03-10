@@ -13,26 +13,41 @@ class GridEnv(BaseEnv):
         
         self.n_steps = args.n_steps
         self.n_dims = args.n_dims
-        self.actions_per_dim = args.actions_per_dim # Can be mixed positive/negative values
-        self.action_dim = self.n_dims * len(self.actions_per_dim) # Total number of possible actions
         
-        # Determine the action type 
-        self.only_negative_actions = all(a < 0 for a in self.actions_per_dim)
-        self.has_mixed_actions = any(a > 0 for a in self.actions_per_dim) and any(a < 0 for a in self.actions_per_dim)
+        # Infer n_nodes from n_dims by solving quadratic: n^2 + n - n_dims = 0
+        self.n_nodes = int((-1 + (1 + 4*self.n_dims)**0.5) / 2)
         
-        # Grid bounds
+        self.actions_per_dim = args.actions_per_dim # Dict with actions for weights and diagonals
+        
+        # Calculate total number of possible actions
+        n_weight_params = self.n_nodes * self.n_nodes  # n^2 weight parameters
+        n_diag_params = self.n_nodes  # n diagonal parameters
+        self.action_dim = (len(self.actions_per_dim['weight']) * n_weight_params + 
+                          len(self.actions_per_dim['diagonal']) * n_diag_params)
+        
+        # Grid bounds for weights and diagonal parameters
         self.grid_bound = args.grid_bound
         self.enable_time = args.enable_time
-        self.consistent_signs = args.consistent_signs # New flag to enforce consistent signs per dimension
-        base_encoding_dim = (2 * self.grid_bound + 1) * self.n_dims if self.has_mixed_actions else (self.grid_bound + 1) * self.n_dims
+        self.consistent_signs = args.consistent_signs
+        
+        # Calculate encoding dimension
+        weight_encoding = (self.grid_bound['weight']['max'] - self.grid_bound['weight']['min'] + 1) * n_weight_params
+        diag_encoding = (self.grid_bound['diagonal']['max'] - self.grid_bound['diagonal']['min'] + 1) * n_diag_params
+        base_encoding_dim = weight_encoding + diag_encoding
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
     
     def print_actions(self):
         print("-"*42)
         action_names = []
-        for dim in range(self.n_dims):
-            for action in self.actions_per_dim:
-                action_names.append(f"dim{dim} {action}")
+        n_weight_params = self.n_nodes * self.n_nodes
+        # Add weight actions
+        for dim in range(n_weight_params):
+            for action in self.actions_per_dim['weight']:
+                action_names.append(f"weight{dim} {action}")
+        # Add diagonal actions    
+        for dim in range(self.n_nodes):
+            for action in self.actions_per_dim['diagonal']:
+                action_names.append(f"diag{dim} {action}")
         print("All available actions (action_names):", len(action_names))
         assert len(action_names) == self.action_dim
         print([f"({i}): {name}" for i, name in enumerate(action_names)])
@@ -54,29 +69,26 @@ class GridEnv(BaseEnv):
             time_one_hot[time_step] = 1
             one_hots.append(time_one_hot)
             
-        # Encode spatial dimensions
-        for dim_val in spatial_state:
-            # Create a one-hot vector with appropriate size
-            if self.has_mixed_actions:
-                # For mixed actions, shift values to be 0-indexed
-                one_hot = np.zeros(2 * self.grid_bound + 1, dtype=int)
-                one_hot[dim_val + self.grid_bound] = 1
-            elif self.only_negative_actions:
-                # For negative actions, shift values to be 0-indexed
-                one_hot = np.zeros(self.grid_bound + 1, dtype=int)
-                one_hot[dim_val + self.grid_bound] = 1
-            else:
-                # For positive-only actions
-                one_hot = np.zeros(self.grid_bound + 1, dtype=int)
-                one_hot[dim_val] = 1
+        n_weight_params = self.n_nodes * self.n_nodes
+        
+        # Encode weight dimensions
+        weight_size = self.grid_bound['weight']['max'] - self.grid_bound['weight']['min'] + 1
+        for dim_val in spatial_state[:n_weight_params]:
+            one_hot = np.zeros(weight_size, dtype=int)
+            one_hot[dim_val - self.grid_bound['weight']['min']] = 1
             one_hots.append(one_hot)
+            
+        # Encode diagonal dimensions
+        diag_size = self.grid_bound['diagonal']['max'] - self.grid_bound['diagonal']['min'] + 1
+        for dim_val in spatial_state[n_weight_params:]:
+            one_hot = np.zeros(diag_size, dtype=int)
+            one_hot[dim_val - self.grid_bound['diagonal']['min']] = 1
+            one_hots.append(one_hot)
+            
         return np.concatenate(one_hots)
 
     def encoding_to_state(self, encoding) -> np.ndarray:
-        # Convert one-hot encoding back to state coordinates
         spatial_state = np.zeros(self.n_dims, dtype=np.int32)
-        dim_size = 2 * self.grid_bound + 1 if self.has_mixed_actions else self.grid_bound + 1
-        
         offset = 0
         time_step = 0
         
@@ -86,74 +98,103 @@ class GridEnv(BaseEnv):
             time_step = np.where(time_one_hot == 1)[0][0]
             offset = self.n_steps + 1
         
-        for dim in range(self.n_dims):
-            # Extract one-hot segment for this dimension
-            start_idx = offset + dim * dim_size
-            end_idx = start_idx + dim_size
+        n_weight_params = self.n_nodes * self.n_nodes
+        
+        # Extract weight dimensions
+        weight_size = self.grid_bound['weight']['max'] - self.grid_bound['weight']['min'] + 1
+        for dim in range(n_weight_params):
+            start_idx = offset + dim * weight_size
+            end_idx = start_idx + weight_size
             one_hot_segment = encoding[start_idx:end_idx]
-            # Find the index of 1 in the one-hot segment
             hot_idx = np.where(one_hot_segment == 1)[0][0]
-            
-            if self.has_mixed_actions:
-                # Convert back from shifted index for mixed actions
-                spatial_state[dim] = hot_idx - self.grid_bound
-            elif self.only_negative_actions:
-                # Convert back from shifted index for negative actions
-                spatial_state[dim] = hot_idx - self.grid_bound
-            else:
-                # No shift needed for positive-only actions
-                spatial_state[dim] = hot_idx
+            spatial_state[dim] = hot_idx + self.grid_bound['weight']['min']
+        
+        # Extract diagonal dimensions
+        diag_size = self.grid_bound['diagonal']['max'] - self.grid_bound['diagonal']['min'] + 1
+        offset = offset + n_weight_params * weight_size
+        for dim in range(self.n_nodes):
+            start_idx = offset + dim * diag_size
+            end_idx = start_idx + diag_size
+            one_hot_segment = encoding[start_idx:end_idx]
+            hot_idx = np.where(one_hot_segment == 1)[0][0]
+            spatial_state[dim + n_weight_params] = hot_idx + self.grid_bound['diagonal']['min']
                 
         return (time_step, spatial_state) if self.enable_time else spatial_state
     
-    def _check_state_bounds(self, state_val):
+    def _check_state_bounds(self, state_val, is_weight):
         """Helper method to check if a state value is within valid bounds"""
-        if self.only_negative_actions:
-            # For negative-only actions, valid range is [-grid_bound, 0]
-            return -self.grid_bound <= state_val <= 0
-        elif self.has_mixed_actions:
-            # For mixed actions, valid range is [-grid_bound, grid_bound]
-            return -self.grid_bound <= state_val <= self.grid_bound
-        else:
-            # For positive-only actions, valid range is [0, grid_bound]
-            return 0 <= state_val <= self.grid_bound
+        bound = self.grid_bound['weight'] if is_weight else self.grid_bound['diagonal']
+        return bound['min'] <= state_val <= bound['max']
 
     def _get_action_mask(self, state, is_forward=True):
         # Extract spatial state if time is enabled
         spatial_state = state[1] if self.enable_time else state
         
         mask = np.zeros(self.action_dim, dtype=bool)
-        for action_idx in range(self.action_dim):
-            dim = action_idx // len(self.actions_per_dim)
-            action_val = self.actions_per_dim[action_idx % len(self.actions_per_dim)]
-            next_state = spatial_state.copy()
-            # For forward mask add the action, for backward mask subtract it
-            next_state[dim] += action_val if is_forward else -action_val
-            
-            # Check sign consistency when enabled
-            if self.consistent_signs and self.has_mixed_actions:
-                current_val = spatial_state[dim]
-                if current_val > 0:  # If positive, only allow positive actions
-                    if action_val <= 0:
-                        mask[action_idx] = False
+        
+        n_weight_params = self.n_nodes * self.n_nodes
+        
+        # Handle weight actions
+        weight_actions = len(self.actions_per_dim['weight'])
+        for dim in range(n_weight_params):
+            for action_idx, action_val in enumerate(self.actions_per_dim['weight']):
+                mask_idx = dim * weight_actions + action_idx
+                next_state = spatial_state.copy()
+                next_state[dim] += action_val if is_forward else -action_val
+                
+                # Check sign consistency when enabled
+                if self.consistent_signs:
+                    current_val = spatial_state[dim]
+                    if current_val > 0 and action_val <= 0:
                         continue
-                elif current_val < 0:  # If negative, only allow negative actions
-                    if action_val >= 0:
-                        mask[action_idx] = False
+                    elif current_val < 0 and action_val >= 0:
                         continue
-                # At zero, allow any action
-            
-            if self._check_state_bounds(next_state[dim]):
-                mask[action_idx] = True
+                
+                if self._check_state_bounds(next_state[dim], is_weight=True):
+                    mask[mask_idx] = True
+        
+        # Handle diagonal actions
+        diag_actions = len(self.actions_per_dim['diagonal'])
+        base_idx = n_weight_params * weight_actions
+        for dim in range(self.n_nodes):
+            for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
+                mask_idx = base_idx + dim * diag_actions + action_idx
+                next_state = spatial_state.copy()
+                next_state[dim + n_weight_params] += action_val if is_forward else -action_val
+                
+                # Check sign consistency when enabled
+                if self.consistent_signs:
+                    current_val = spatial_state[dim + n_weight_params]
+                    if current_val > 0 and action_val <= 0:
+                        continue
+                    elif current_val < 0 and action_val >= 0:
+                        continue
+                
+                if self._check_state_bounds(next_state[dim + n_weight_params], is_weight=False):
+                    mask[mask_idx] = True
+                    
         return mask
 
     def step(self, a):
-        # Convert flat action index to dimension and action value
-        dim = a // len(self.actions_per_dim)  # Which dimension to modify
-        action_idx = a % len(self.actions_per_dim)  # Which action to apply
-        action_value = self.actions_per_dim[action_idx]  # The actual value to add
+        # Determine if action is for weight or diagonal parameter
+        weight_actions = len(self.actions_per_dim['weight'])
+        n_weight_params = self.n_nodes * self.n_nodes
+        total_weight_actions = n_weight_params * weight_actions
         
-        # Update the state in the chosen dimension
+        if a < total_weight_actions:
+            # Weight parameter action
+            dim = a // weight_actions
+            action_idx = a % weight_actions
+            action_value = self.actions_per_dim['weight'][action_idx]
+        else:
+            # Diagonal parameter action
+            diag_actions = len(self.actions_per_dim['diagonal'])
+            a_adjusted = a - total_weight_actions
+            dim = n_weight_params + (a_adjusted // diag_actions)
+            action_idx = a_adjusted % diag_actions
+            action_value = self.actions_per_dim['diagonal'][action_idx]
+        
+        # Update the state
         if self.enable_time:
             spatial_state = self._state[1].copy()
             spatial_state[dim] += action_value

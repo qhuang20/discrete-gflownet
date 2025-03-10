@@ -182,6 +182,8 @@ plt.close()
 
 
 """Save modes information to file and Plot top_m"""
+""" file output_path = analysis_results.txt """
+
 output_path = os.path.join(os.path.dirname(checkpoint_path), "analysis_results.txt")
 top_m = sorted(
     [(mode, info['reward']) for mode, info in modes_dict.items()],
@@ -227,99 +229,100 @@ print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
 
 
 
+"""Save top performing final states and their trajectories to file"""
+TOP_N = 20  
+TOP_REWARD_THRESHOLD = 8  
+TOP_TRAJECTORIES = 11
 
+with open(output_path, 'a') as f:
+    """By avg average trajectory rewards"""
+    f.write("-" * 30 + "\n")
+    f.write(f"Top {TOP_N} Final States by Avg Average Trajectory Rewards:\n") 
+    f.write("-" * 30 + "\n")
 
-# """Save top performing final states and their trajectories to file"""
-# TOP_N = 20  
-# TOP_REWARD_THRESHOLD = 8  
-# TOP_TRAJECTORIES = 11
+    # Calculate avg average trajectory rewards for each final state (but in somite, we are likely to only have one traj)
+    final_state_avg_rewards = {}
+    for final_state, trajectories in ep_last_state_trajectories.items():
+        traj_avgs = []
+        for traj in trajectories:
+            rewards = [r[0] for r in traj['rewards']]
+            traj_avgs.append(sum(rewards) / len(rewards))
+        final_state_avg_rewards[final_state] = sum(traj_avgs) / len(traj_avgs)
 
-# with open(output_path, 'a') as f:
-#     """By avg average trajectory rewards"""
-#     f.write("-" * 30 + "\n")
-#     f.write(f"Top {TOP_N} Final States by Avg Average Trajectory Rewards:\n") 
-#     f.write("-" * 30 + "\n")
+    top_reward_final_states = sorted(
+        final_state_avg_rewards.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )[:TOP_N]
 
-#     # Calculate avg average trajectory rewards for each final state
-#     final_state_avg_rewards = {}
-#     for final_state, trajectories in ep_last_state_trajectories.items():
-#         traj_avgs = []
-#         for traj in trajectories:
-#             rewards = [r[0] for r in traj['rewards']]
-#             traj_avgs.append(sum(rewards) / len(rewards))
-#         final_state_avg_rewards[final_state] = sum(traj_avgs) / len(traj_avgs)
-
-#     top_reward_final_states = sorted(
-#         final_state_avg_rewards.items(),
-#         key=lambda x: x[1],
-#         reverse=True
-#     )[:TOP_N]
-
-#     for final_state, avg_reward in top_reward_final_states:
-#         trajectories = ep_last_state_trajectories[final_state]
-#         terminal_reward = trajectories[0]['rewards'][-1][0]
-#         count = ep_last_state_counts[final_state]
+    for final_state, avg_reward in top_reward_final_states:
+        trajectories = ep_last_state_trajectories[final_state]
+        terminal_reward = trajectories[0]['rewards'][-1][0]
+        count = ep_last_state_counts[final_state]
         
-#         f.write(f"Final State: {final_state}, Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
+        f.write(f"Final State: {final_state}, Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
         
-#         # Write each trajectory and its average reward
-#         for traj in trajectories:
-#             rewards = [r[0] for r in traj['rewards']]
-#             states = traj['states']
-#             traj_avg = sum(rewards) / len(rewards)
-#             f.write(f"Trajectory state-reward pairs: {[(states[i], f'${r:.3f}' if r > TOP_REWARD_THRESHOLD else f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
-#         f.write("\n")
+        # Write each trajectory and its average reward
+        for traj in trajectories:
+            rewards = [r[0] for r in traj['rewards']]
+            states = traj['states']
+            traj_avg = sum(rewards) / len(rewards)
+            f.write("Trajectory state-reward pairs:\n")
+            for i, (state, reward) in enumerate(zip(states, rewards)):
+                reward_str = f'${reward:.3f}' if reward > TOP_REWARD_THRESHOLD else f'{reward:.3f}'
+                f.write(f"  Step {i}: State={state}, Reward={reward_str}\n")
+            f.write(f"Average: {traj_avg:.3f}\n\n")
 
-#     """By final state's visit count"""
-#     f.write("\n" + "-" * 30 + "\n")
-#     f.write(f"Top {TOP_N} Final States by Visit Count:\n")
-#     f.write("-" * 30 + "\n")
+    # """By final state's visit count"""
+    # f.write("\n" + "-" * 30 + "\n")
+    # f.write(f"Top {TOP_N} Final States by Visit Count:\n")
+    # f.write("-" * 30 + "\n")
 
-#     top_count_final_states = sorted(
-#         ep_last_state_counts.items(),
-#         key=lambda x: x[1],
-#         reverse=True
-#     )[:TOP_N]
+    # top_count_final_states = sorted(
+    #     ep_last_state_counts.items(),
+    #     key=lambda x: x[1],
+    #     reverse=True
+    # )[:TOP_N]
 
-#     for final_state, count in top_count_final_states:
-#         trajectories = ep_last_state_trajectories[final_state]
-#         terminal_reward = trajectories[0]['rewards'][-1][0]
-#         avg_reward = final_state_avg_rewards[final_state]
+    # for final_state, count in top_count_final_states:
+    #     trajectories = ep_last_state_trajectories[final_state]
+    #     terminal_reward = trajectories[0]['rewards'][-1][0]
+    #     avg_reward = final_state_avg_rewards[final_state]
         
-#         f.write(f"Final State: {final_state}, Visit Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
+    #     f.write(f"Final State: {final_state}, Visit Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
         
-#         # Write each trajectory and its average reward
-#         for traj in trajectories:
-#             rewards = [r[0] for r in traj['rewards']]
-#             states = traj['states']
-#             traj_avg = sum(rewards) / len(rewards)
-#             f.write(f"Trajectory state-reward pairs: {[(states[i], f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
-#         f.write("\n")
+    #     # Write each trajectory and its average reward
+    #     for traj in trajectories:
+    #         rewards = [r[0] for r in traj['rewards']]
+    #         states = traj['states']
+    #         traj_avg = sum(rewards) / len(rewards)
+    #         f.write(f"Trajectory state-reward pairs: {[(states[i], f'{r:.3f}') for i,r in enumerate(rewards)]}, Average: {traj_avg:.3f}\n")
+    #     f.write("\n")
 
-#     """Find trajectories with high rewards leading to final states"""
-#     f.write("\n" + "-" * 30 + "\n") 
-#     f.write(f"Top {TOP_TRAJECTORIES} Trajectories with Rewards > {TOP_REWARD_THRESHOLD}:\n")
-#     f.write("-" * 30 + "\n")
+    # """Find trajectories with high rewards leading to final states"""
+    # f.write("\n" + "-" * 30 + "\n") 
+    # f.write(f"Top {TOP_TRAJECTORIES} Trajectories with Rewards > {TOP_REWARD_THRESHOLD}:\n")
+    # f.write("-" * 30 + "\n")
 
-#     high_reward_trajectories = []
-#     for final_state, trajectories in ep_last_state_trajectories.items():
-#         for traj in trajectories:
-#             rewards = [r[0] for r in traj['rewards']]
-#             max_reward = max(rewards)
-#             if max_reward > TOP_REWARD_THRESHOLD:
-#                 high_reward_trajectories.append((final_state, traj, max_reward))
+    # high_reward_trajectories = []
+    # for final_state, trajectories in ep_last_state_trajectories.items():
+    #     for traj in trajectories:
+    #         rewards = [r[0] for r in traj['rewards']]
+    #         max_reward = max(rewards)
+    #         if max_reward > TOP_REWARD_THRESHOLD:
+    #             high_reward_trajectories.append((final_state, traj, max_reward))
 
-#     # Sort by max reward and take top N
-#     top_trajectories = sorted(high_reward_trajectories, key=lambda x: x[2], reverse=True)[:TOP_TRAJECTORIES]
+    # # Sort by max reward and take top N
+    # top_trajectories = sorted(high_reward_trajectories, key=lambda x: x[2], reverse=True)[:TOP_TRAJECTORIES]
 
-#     for i, (final_state, traj, max_reward) in enumerate(top_trajectories, 1):
-#         f.write(f"\nRank {i} - Final State: {final_state}, Max Reward: {max_reward:.3f}\n")
-#         rewards = [r[0] for r in traj['rewards']]
-#         states = traj['states']
-#         f.write(f"Full trajectory:\n")
-#         for step, (s, r) in enumerate(zip(states, rewards)):
-#             f.write(f"Step {step}: State={s}, Reward={r:.3f}\n")
-#         f.write("\n")
+    # for i, (final_state, traj, max_reward) in enumerate(top_trajectories, 1):
+    #     f.write(f"\nRank {i} - Final State: {final_state}, Max Reward: {max_reward:.3f}\n")
+    #     rewards = [r[0] for r in traj['rewards']]
+    #     states = traj['states']
+    #     f.write(f"Full trajectory:\n")
+    #     for step, (s, r) in enumerate(zip(states, rewards)):
+    #         f.write(f"Step {step}: State={s}, Reward={r:.3f}\n")
+    #     f.write("\n")
 
 
     
@@ -329,15 +332,48 @@ print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
 
 
 
-# """Create animation for the top trajectory"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# """Create animation for the top trajectory by average reward"""
 # from graph.graph import draw_network_motif
 # import imageio
 
+# # Get trajectories sorted by avg average trajectory rewards
+# top_reward_final_states = sorted(
+#     final_state_avg_rewards.items(),
+#     key=lambda x: x[1], 
+#     reverse=True
+# )
 
-# # Get the top trajectory
-# top_state, top_traj, _ = top_trajectories[args.trajectory_idx]
-# states = top_traj['states']
-# rewards = [r[0] for r in top_traj['rewards']]
+# # Get the specified trajectory
+# final_state = top_reward_final_states[args.trajectory_idx][0]
+# trajectories = ep_last_state_trajectories[final_state]
+# traj = trajectories[0]  # Take first trajectory for this final state
+# states = traj['states']
+# rewards = [r[0] for r in traj['rewards']]
 
 # def create_frames(states, rewards):
 #     frames = []
@@ -374,138 +410,6 @@ print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
 
 
 
-
-
-
-
-
-"""Dimension Reduction Analysis"""
-
-n_top_modes = 6
-# run_dir = "___top_20250202_180455_fldb_h256_l3_mr0.001_ts6000_d9_s55_er0.05_etFalse"
-
-def analyze_modes(run_dir, modes_dict, save_dir="visualization_modes"):
-    """Analyze and visualize modes."""
-    print(f"Total number of modes found: {len(modes_dict)}\n")
-
-    # Sort modes by reward
-    sorted_modes = sorted(modes_dict.items(), key=lambda x: x[1]['reward'], reverse=True)
-    
-    # Print top 10 modes details
-    print("Top 10 modes:")
-    print("-" * 50)
-    for i, (state, info) in enumerate(sorted_modes[:10], 1):
-        print(f"\nMode {i}:")
-        print(f"State: {list(state)}")
-        print(f"Reward: {info['reward']:.3f}")
-        print(f"Discovered at training step: {info['step']}")
-        print("\nTrajectory:")
-        for step, (s, r) in enumerate(zip(info['states'], info['rewards'])):
-            print(f"Step {step}: State={s}, Reward={r:.3f}")
-        print("-" * 30)
-
-    # Extract states and rewards for visualization
-    states = np.array([list(state) for state, _ in sorted_modes])
-    rewards = np.array([info['reward'] for _, info in sorted_modes])
-    
-    print(f"States shape: {states.shape}")
-    print(f"First two states:\n{states[:2]}")
-
-    # Create and save visualizations
-    save_path = os.path.join("runs", run_dir, save_dir)
-    os.makedirs(save_path, exist_ok=True)
-    generate_visualizations(states, rewards, save_path)
-    print(f"\nModes visualization saved to {save_path}")
-    
-    return sorted_modes
-
-def analyze_trajectories(sorted_modes, n_top_modes, run_dir, save_dir="visualization_trajectories"):
-    """Analyze and visualize trajectories from top modes."""
-    all_states = []
-    all_rewards = []
-    
-    # Collect trajectories from top N modes
-    for i, (state, info) in enumerate(sorted_modes[:n_top_modes]):
-        trajectory_states = info['states']
-        trajectory_rewards = info['rewards']
-        all_states.extend(trajectory_states)
-        all_rewards.extend(trajectory_rewards)
-        print(f"Mode {i+1} reward: {info['reward']:.3f}")
-        print(f"Trajectory length: {len(trajectory_states)}\n")
-
-    # Convert to numpy arrays
-    all_states = np.array(all_states)
-    all_rewards = np.array(all_rewards)
-
-    # Create and save visualizations
-    save_path = os.path.join("runs", run_dir, save_dir)
-    os.makedirs(save_path, exist_ok=True)
-    embeddings = generate_visualizations(all_states, all_rewards, save_path, 
-                                      cmap='copper_r', show_annotations=True)
-    print(f"\nCombined trajectory visualization saved to {save_path}")
-    
-    return embeddings, all_rewards  # Return rewards along with embeddings
-
-# Load modes data
-modes_save_path = os.path.join("runs", args.run_dir, "modes_with_trajectories.pkl")
-with open(modes_save_path, 'rb') as f:
-    modes_dict = pickle.load(f)
-
-# Run analyses
-sorted_modes = analyze_modes(args.run_dir, modes_dict)
-embeddings, all_rewards = analyze_trajectories(sorted_modes, n_top_modes=n_top_modes, run_dir=args.run_dir)
-
-
-
-
-
-
-
-"""Find indices of top N rewards to analyze"""
-
-n_top_states = 16
-query_indices = [94, 40, 152]
-
-def print_pacmap_details(pacmap_data):
-    """Print details about PaCMAP embeddings"""
-    print("\nPaCMAP Details:")
-    print("-" * 50)
-    print("PaCMAP Embedding Shape:", pacmap_data['embedding'].shape)
-    print("Original Data Shape:", pacmap_data['original'].shape) 
-    print("Index Array Shape:", pacmap_data['idx'].shape)
-    print("-" * 50)
-
-def print_top_states(pacmap_data, rewards, n_top_states=16):
-    """Print information about top N states by reward"""
-    top_n_indices = np.argsort(rewards)[-n_top_states:][::-1]
-    
-    print(f"\nTop {n_top_states} States with Highest Rewards:")
-    print("-" * 50)
-    for i in top_n_indices:
-        idx = pacmap_data['idx'][i]
-        original_state = pacmap_data['original'][i]
-        reward = rewards[i]
-        print(f"Index {idx}:")
-        print(f"Original State: {original_state}")
-        print(f"Reward: {reward:.3f}")
-        print("-" * 30)
-
-def print_specific_indices(pacmap_data, rewards, indices):
-    """Print details for specific indices"""
-    for index in indices:
-        idx_special = pacmap_data['idx'] == index
-        i = np.where(idx_special)[0][0]
-        print(f"\nDetails for Index {index}:")
-        print("-" * 60)
-        print(f"Original State: {pacmap_data['original'][i]}")
-        print(f"Reward: {rewards[i]:.3f}")
-        print(f"PaCMAP Coordinates: {pacmap_data['embedding'][i]}")
-
-# Print analysis results
-pacmap_data = embeddings['pacmap']
-print_pacmap_details(pacmap_data)
-print_top_states(pacmap_data, all_rewards, n_top_states)
-print_specific_indices(pacmap_data, all_rewards, query_indices)
 
 
 

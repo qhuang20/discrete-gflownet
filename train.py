@@ -123,8 +123,7 @@ def main(args):
             if args.method == 'fldb':
                 loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
             else:
-                loss, z = agent.compute_batch_loss(experiences) 
-                
+                loss, z = agent.compute_batch_loss(experiences)     
             losses.append(loss.item())
             zs.append(z.item()) 
 
@@ -156,19 +155,19 @@ def main(args):
 
 
 if __name__ == '__main__':
-    print(f"Available CPU threads: {os.cpu_count()}")
-    print(f"Default PyTorch threads: {torch.get_num_threads()}")
-    torch.set_num_threads(1) 
+    print(f"Available OS CPU threads: {os.cpu_count()}")
+    print(f"Default PyTorch CPU threads: {torch.get_num_threads()}")
+    # torch.set_num_threads(1) 
     
     argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
     
     # Training
-    argparser.add_argument('--device', type=str, default='cpu')
+    argparser.add_argument('--device', type=str, default='cpu') # cuda
     argparser.add_argument('--progress', type=bool, default=True)
     argparser.add_argument('--seed', type=int, default=42) 
     # argparser.add_argument('--n_train_steps', type=int, default=1000) 
-    argparser.add_argument('--n_train_steps', type=int, default=6000) 
-    argparser.add_argument('--n_workers', type=int, default=1) 
+    argparser.add_argument('--n_train_steps', type=int, default=2000) 
+    argparser.add_argument('--n_workers', type=int, default=10) 
     argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
     # argparser.add_argument('--log_freq', type=int, default=100) 
     argparser.add_argument('--log_freq', type=int, default=1000) 
@@ -179,37 +178,35 @@ if __name__ == '__main__':
     # argparser.add_argument('--method', type=str, default='tb') 
     argparser.add_argument('--method', type=str, default='fldb') 
     # argparser.add_argument('--explore_ratio', type=float, default=0.06) 
-    argparser.add_argument('--explore_ratio', type=float, default=0.35) 
+    argparser.add_argument('--explore_ratio', type=float, default=0.05) 
     argparser.add_argument('--learning_rate', type=float, default=1e-3)
     argparser.add_argument('--tb_lr', type=float, default=0.01)
     argparser.add_argument('--tb_z_lr', type=float, default=0.1)
     argparser.add_argument('--n_hid', type=int, default=256)
-    argparser.add_argument('--n_layers', type=int, default=3)
+    argparser.add_argument('--n_layers', type=int, default=3)  # 300
     argparser.add_argument('--temp', type=float, default=1.0)
     argparser.add_argument('--uni_rand_pb', type=float, default=1.0) 
     
     # Environment 
     argparser.add_argument('--envsize', type=int, default=8)
-    # argparser.add_argument('--min_reward', type=float, default=1e-6)
-    argparser.add_argument('--min_reward', type=float, default=1e-3)  
+    argparser.add_argument('--min_reward', type=float, default=1e-3)  # 1e-6
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
-    # argparser.add_argument('--grid_bound', type=int, default=10)
-    argparser.add_argument('--grid_bound', type=int, default=200)
-    # argparser.add_argument('--n_dims', type=int, default=2) 
-    argparser.add_argument('--n_dims', type=int, default=9)
-    # argparser.add_argument('--n_steps', type=int, default=35) 
-    argparser.add_argument('--n_steps', type=int, default=55) # 11*9 vs 8*9
-    # argparser.add_argument('--actions_per_dim', type=list, default=[1])
-    argparser.add_argument('--actions_per_dim', type=list, default=[1, 5, 25, -1, -5, -25]) # 3*25 + 4*5 + 4*1 = 99
+    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func)
+    argparser.add_argument('--n_steps', type=int, default=55)  # 11*9 vs 8*9
+    # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
+    argparser.add_argument('--n_dims', type=int, default=3**2+3)
+    argparser.add_argument('--grid_bound', type=dict, default={
+        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
+        'diagonal': {'min': -20, 'max': 20},    # For the 3 diagonal factors
+    })
+    argparser.add_argument('--actions_per_dim', type=dict, default={
+        'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
+        'diagonal': [1, 5, -1, -5],         # For the 3 diagonal factors
+    })
 
     args = argparser.parse_args()
-
-
-    # Training
     main(args)
-    # print("losses: ", losses)
 
 
 

@@ -17,9 +17,6 @@ def coord_reward_func(state):
 
 
 
-
-
-
 # helpers for oscillator and somite
 
 def sigmoid(z):
@@ -27,8 +24,7 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-np.clip(z, -5000, 5000)))
 
 
-
-def state_to_matrix_transformation(state, plot=False, ax=None):
+def weights_to_matrix(weights, plot=False, ax=None):
     """
     Transform state vector to matrix following specific pattern:
     1 node: [w1] -> [[w1]]
@@ -41,26 +37,26 @@ def state_to_matrix_transformation(state, plot=False, ax=None):
     Returns an integer weight matrix.
     """
     # Infer number of nodes from state length
-    n_nodes = int(np.sqrt(len(state)))
-    assert n_nodes * n_nodes == len(state), "State length must be a perfect square"
+    n_nodes = int(np.sqrt(len(weights)))
+    assert n_nodes * n_nodes == len(weights), "State length must be a perfect square"
     
     if n_nodes == 1:
-        return np.array([[int(state[0])]], dtype=np.int32)
+        return np.array([[int(weights[0])]], dtype=np.int32)
         
     # Initialize matrix with zeros
     W_matrix = np.zeros((n_nodes, n_nodes), dtype=np.int32)
     
     # Base case for 2x2
     if n_nodes == 2:
-        W_matrix[0,0] = state[0]  # w1
-        W_matrix[1,1] = state[1]  # w2
-        W_matrix[1,0] = state[2]  # w3
-        W_matrix[0,1] = state[3]  # w4
+        W_matrix[0,0] = weights[0]  # w1
+        W_matrix[1,1] = weights[1]  # w2
+        W_matrix[1,0] = weights[2]  # w3
+        W_matrix[0,1] = weights[3]  # w4
         return W_matrix
         
     # For larger matrices, first copy the (n-1)x(n-1) inner matrix
     prev_size = n_nodes - 1
-    prev_matrix = state_to_matrix_transformation(state[:prev_size*prev_size])
+    prev_matrix = weights_to_matrix(weights[:prev_size*prev_size])
     
     # Copy previous matrix to top-left corner
     W_matrix[:prev_size, :prev_size] = prev_matrix
@@ -69,20 +65,19 @@ def state_to_matrix_transformation(state, plot=False, ax=None):
     start_idx = prev_size * prev_size  # Start index for new weights
     
     # First place diagonal element
-    W_matrix[n_nodes-1, n_nodes-1] = state[start_idx]
+    W_matrix[n_nodes-1, n_nodes-1] = weights[start_idx]
     
     # Fill rest of last row and column alternating between row and column entries
     curr_idx = start_idx + 1
     for i in range(n_nodes-1):
         # Fill matrix entry W_x,i
-        W_matrix[n_nodes-1, i] = state[curr_idx]
+        W_matrix[n_nodes-1, i] = weights[curr_idx]
         curr_idx += 1
         # Fill matrix entry W_i,x
-        W_matrix[i, n_nodes-1] = state[curr_idx]
+        W_matrix[i, n_nodes-1] = weights[curr_idx]
         curr_idx += 1
         
     return W_matrix
-
 
 
 
@@ -171,18 +166,13 @@ def oscillator_reward_func(weights, plot=False):
     return calculate_reward(sol)
 
 
-
-
-
-
-
-
 def somitogenesis_reward_func(state, plot=False, ax=None):
     """
     Calculate reward based on gene expression pattern simulation.
     
     Args:
-        state: 1D array of weights representing weight matrix (n^2 elements for n nodes)
+        state: 1D array containing weights (w), diagonal factors (d), and decay rates (s)
+              For n nodes: n^2 weights + n d values + n s values = n^2 + 2n total parameters
         plot: bool, whether to plot the heatmap (default: False)
         ax: matplotlib axes object for plotting in a grid (default: None)
         
@@ -190,9 +180,18 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         float: Reward value based on pattern formation and stability
     """
     
-    # Infer number of nodes from state length
-    n_nodes = int(np.sqrt(len(state)))
-    assert n_nodes * n_nodes == len(state), "State length must be a perfect square"
+    # n_nodes = int((-2 + (4 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + 2n - len(state) = 0 
+    n_nodes = int((-1 + (1 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + n - len(state) = 0 
+    n_weights = n_nodes * n_nodes
+    weights = state[:n_weights]
+    d_values = state[n_weights:n_weights+n_nodes]
+    
+    # Generate decreasing s_values with the correct length based on n_nodes
+    s_values = np.zeros(n_nodes)
+    for i in range(n_nodes):
+        s_values[i] = 1.2 - 0.1 * i
+        if s_values[i] < 0.1:  # Set a minimum value
+            s_values[i] = 0.1
     
     # System parameters - moved to constants for faster access
     N_CELLS = 100
@@ -202,33 +201,42 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     DELTA_STABILITY = 0.02
     STABILITY_WEIGHT = 1.0
     STABILITY_POWER = 5  # smaller tolerates waves more 
+    N_BOUNDARY_CHECKS = 3
     RTOL = 1e-3
     ATOL = 1e-6
-    WEIGHT_SCALE = 20
-    N_BOUNDARY_CHECKS = 3
+    WEIGHT_SCALE = 10
+    DIAGONAL_SCALE = 10
+    
     
     # Pre-compute initial conditions
-    x0 = np.full(N_CELLS * n_nodes, 0.1)  # 0.1
+    x0 = np.full(N_CELLS * n_nodes, 0.1)  # Faster than tile
     
     # Fixed parameters
-    D = np.eye(n_nodes)  # Identity matrix for n_nodes
+    D = np.diag(d_values) / DIAGONAL_SCALE  # Scale diagonal values
     D_ONES = D @ np.ones(n_nodes)
     A, B = 0.1, 0.2
+    S = s_values  # Decay rates
     
     # Pre-compute positions array
     positions = np.arange(N_CELLS).reshape(-1, 1)
 
+    def weights_to_matrix(weights):
+        """Convert flat weights to matrix form"""
+        return np.array(weights).reshape(n_nodes, n_nodes)
+
     def n_node_system(t, x, W):
-        """System dynamics"""
+        """System dynamics with node-specific parameters"""
         x_reshaped = x.reshape(-1, n_nodes)
         g = np.minimum(np.exp(A * positions - B * t), 1)
         z = g * D_ONES + x_reshaped @ W.T
-        return (1 / (1 + np.exp(-z)) - x_reshaped).flatten() # sigmoid(z)
+        sigmoid_z = 1 / (1 + np.exp(-z))
+        # Ensure S has the correct shape for broadcasting
+        decay = x_reshaped * S  # S already has shape (n_nodes,) which broadcasts correctly with (N_CELLS, n_nodes)
+        return (sigmoid_z - decay).flatten()
 
     def simulate_system(weights):
         """Simulate with optimized matrix operations"""
-        # W = np.array(weights).reshape(n_nodes, n_nodes) / WEIGHT_SCALE
-        W = state_to_matrix_transformation(weights) / WEIGHT_SCALE
+        W = weights_to_matrix(weights) / WEIGHT_SCALE
         t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
         
         sol = solve_ivp(
@@ -242,8 +250,6 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         )
         return t, sol.y.T.reshape(len(t), N_CELLS, n_nodes)
 
-    
-    
     def count_boundaries(concentrations):
         """Count boundaries with minimum distance between them"""
         n_boundaries = 0
@@ -297,13 +303,150 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
             plt.show()
 
     # Main execution
-    t, sol = simulate_system(state)
+    t, sol = simulate_system(weights)
     x1_concentration = sol[:, :, 0]
     
     if plot:
         plot_heatmap(x1_concentration, t, ax)
     
     return calculate_reward(x1_concentration)
+
+
+
+
+
+
+# def somitogenesis_reward_func2(state, plot=False, ax=None):
+#     """
+#     Calculate reward based on gene expression pattern simulation.
+    
+#     Args:
+#         state: 1D array containing weights (w), diagonal factors (d), and decay rates (s)
+#               For 3 nodes: 9 weights + 3 d values + 3 s values = 15 total parameters
+#         plot: bool, whether to plot the heatmap (default: False)
+#         ax: matplotlib axes object for plotting in a grid (default: None)
+        
+#     Returns:
+#         float: Reward value based on pattern formation and stability
+#     """
+    
+#     # Extract w, d, s parameters from state
+#     n_nodes = 3  # Fixed for this version
+#     n_weights = n_nodes * n_nodes
+#     weights = state[:n_weights]
+#     d_values = state[n_weights:n_weights+n_nodes]
+#     s_values = state[n_weights+n_nodes:]
+    
+#     # System parameters - moved to constants for faster access
+#     N_CELLS = 100
+#     N_SIMTIME = 90
+#     N_TIMEPOINTS = 200
+#     DELTA_SOMITE = 0.1
+#     DELTA_STABILITY = 0.02
+#     STABILITY_WEIGHT = 1.0
+#     STABILITY_POWER = 5  # smaller tolerates waves more 
+#     RTOL = 1e-3
+#     ATOL = 1e-6
+#     WEIGHT_SCALE = 20
+#     N_BOUNDARY_CHECKS = 3
+    
+#     # Pre-compute initial conditions
+#     x0 = np.full(N_CELLS * n_nodes, 0.1)  # Faster than tile
+    
+#     # Fixed parameters
+#     D = np.diag(d_values)  # Diagonal matrix with d values
+#     D_ONES = D @ np.ones(n_nodes)
+#     A, B = 0.1, 0.2
+#     S = np.array(s_values)  # Decay rates
+    
+#     # Pre-compute positions array
+#     positions = np.arange(N_CELLS).reshape(-1, 1)
+
+#     def n_node_system(t, x, W):
+#         """System dynamics with node-specific parameters"""
+#         x_reshaped = x.reshape(-1, n_nodes)
+#         g = np.minimum(np.exp(A * positions - B * t), 1)
+#         z = g * D_ONES + x_reshaped @ W.T
+#         sigmoid_z = 1 / (1 + np.exp(-z))
+#         decay = x_reshaped * S  # Element-wise multiplication with decay rates
+#         return (sigmoid_z - decay).flatten()
+
+#     def simulate_system(weights):
+#         """Simulate with optimized matrix operations"""
+#         W = weights_to_matrix(weights) / WEIGHT_SCALE
+#         t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
+        
+#         sol = solve_ivp(
+#             lambda t, x: n_node_system(t, x, W),
+#             (t[0], t[-1]),
+#             x0,
+#             t_eval=t,
+#             method='RK45',
+#             rtol=RTOL,
+#             atol=ATOL
+#         )
+#         return t, sol.y.T.reshape(len(t), N_CELLS, n_nodes)
+
+#     def count_boundaries(concentrations):
+#         """Count boundaries with minimum distance between them"""
+#         n_boundaries = 0
+#         last_boundary_pos = -float('inf')  # Position of last detected boundary
+        
+#         for i in range(len(concentrations)-1):
+#             diff = abs(concentrations[i+1] - concentrations[i])
+#             if diff > DELTA_SOMITE:
+#                 # Only count if far enough from last boundary (minimum 4 cells apart)
+#                 if i - last_boundary_pos >= 4: 
+#                     n_boundaries += 1
+#                     last_boundary_pos = i
+#         return n_boundaries
+
+#     def calculate_reward(x1_concentration):
+#         """Optimized reward calculation"""
+#         mid_idx = len(x1_concentration) // 2
+#         check_indices = np.linspace(mid_idx, len(x1_concentration)-1, N_BOUNDARY_CHECKS, dtype=int)
+        
+#         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
+#         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
+        
+#         if total_boundaries <= 2:  # to prevent slope 
+#             return 0.0
+            
+#         # Vectorized stability calculation
+#         second_half = x1_concentration[mid_idx:]
+#         changes = np.abs(np.diff(second_half, axis=0)) > DELTA_STABILITY
+#         total_changes = np.sum(changes)
+#         max_possible_changes = (len(second_half) - 1) * N_CELLS
+        
+#         stability_reward = round(STABILITY_WEIGHT * (1 - total_changes / max_possible_changes), 3)
+#         if plot: print(f"Stability reward: {stability_reward}")
+        
+#         return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
+
+#     def plot_heatmap(x1_concentration, t, ax=None):
+#         """Plot heatmap (unchanged since plotting is not performance critical)"""
+#         if ax is None:
+#             plt.figure(figsize=(10, 6))
+#             ax = plt.gca()
+            
+#         im = ax.imshow(x1_concentration.T, aspect='auto', cmap='Blues',
+#                       extent=[0, N_SIMTIME, 100, 0])
+#         plt.colorbar(im, ax=ax, label='x1 Concentration')
+#         ax.set_xlabel('Time')
+#         ax.set_ylabel('Position')
+#         ax.set_title('x1 Concentration Across Time and Space')
+        
+#         if ax is None:
+#             plt.show()
+
+#     # Main execution
+#     t, sol = simulate_system(weights)
+#     x1_concentration = sol[:, :, 0]
+    
+#     if plot:
+#         plot_heatmap(x1_concentration, t, ax)
+    
+#     return calculate_reward(x1_concentration)
 
 
 
