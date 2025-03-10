@@ -25,6 +25,12 @@ from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 
 
+from threadpoolctl import threadpool_info, ThreadpoolController
+from pprint import pprint
+
+controller = ThreadpoolController()
+controller.limit(limits=1, user_api='blas')
+
 def compute_reward(curr_ns, env, reward_func):
     curr_ns_state = env.encoding_to_state(curr_ns)
     return reward_func(curr_ns_state) + env.min_reward
@@ -90,6 +96,8 @@ def main(args):
     zs = []  
     ep_last_state_counts = {} # Counts occurrences of each episode last state.
     ep_last_state_trajectories = {}  # Store trajectories (states, actions, rewards) for each last state
+
+    env_pool = Pool(processes=args.n_workers)
     try:
         for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):
             experiences = agent.sample_batch_episodes(args.mbsize)
@@ -104,13 +112,13 @@ def main(args):
                 # print("Start Multiprocessing !") 
                 curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
                 for mb in range(args.mbsize): 
-                    curr_ns_all[mb] = experiences[0][mb].numpy()[1:]
+                    curr_ns_all[mb] = experiences[0][mb].cpu().numpy()[1:] # 
                 curr_ns_all = curr_ns_all.reshape(args.mbsize*args.n_steps, envs[0].encoding_dim)
 
                 compute_reward_partial = partial(compute_reward, env=envs[0], reward_func=args.custom_reward_fn)
                 
-                with Pool(processes=args.n_workers) as env_pool: 
-                    curr_r_env = list(env_pool.imap(compute_reward_partial, curr_ns_all)) 
+
+                curr_r_env = list(env_pool.imap(compute_reward_partial, curr_ns_all)) 
                 curr_r_env = np.asarray(curr_r_env)
                 curr_r_env = curr_r_env.reshape(args.mbsize, args.n_steps, 1) 
 
