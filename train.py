@@ -24,6 +24,16 @@ from disc_gflownet.envs.set_env import SetEnv
 from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 
+from threadpoolctl import threadpool_info, ThreadpoolController
+from pprint import pprint
+controller = ThreadpoolController()
+controller.limit(limits=1, user_api='blas')
+# pprint(threadpool_info())
+# exit()
+
+
+
+
 
 def compute_reward(curr_ns, env, reward_func):
     curr_ns_state = env.encoding_to_state(curr_ns)
@@ -104,7 +114,7 @@ def main(args):
                 # print("Start Multiprocessing !") 
                 curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
                 for mb in range(args.mbsize): 
-                    curr_ns_all[mb] = experiences[0][mb].numpy()[1:]
+                    curr_ns_all[mb] = experiences[0][mb].cpu()[1:] 
                 curr_ns_all = curr_ns_all.reshape(args.mbsize*args.n_steps, envs[0].encoding_dim)
 
                 compute_reward_partial = partial(compute_reward, env=envs[0], reward_func=args.custom_reward_fn)
