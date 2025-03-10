@@ -204,8 +204,9 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     N_BOUNDARY_CHECKS = 3
     RTOL = 1e-3
     ATOL = 1e-6
-    WEIGHT_SCALE = 10
-    DIAGONAL_SCALE = 10
+    WEIGHT_SCALE = 20 
+    # WEIGHT_SCALE = 10 
+    DIAGONAL_SCALE = 10 
     
     
     # Pre-compute initial conditions

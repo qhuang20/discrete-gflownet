@@ -197,7 +197,7 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
     argparser.add_argument('--n_dims', type=int, default=3**2+3)
     argparser.add_argument('--grid_bound', type=dict, default={
-        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
+        'weight': {'min': -200, 'max': 200},     # For the 9 weight parameters
         'diagonal': {'min': -20, 'max': 20},    # For the 3 diagonal factors
     })
     argparser.add_argument('--actions_per_dim', type=dict, default={
