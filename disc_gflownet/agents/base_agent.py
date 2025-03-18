@@ -21,7 +21,7 @@ class BaseAgent:
         self.dev = get_device()  
         self.envs = envs
         self.env = envs[0]
-        self.action_mask_fn = self.env.get_masks
+        self.action_mask_fn = self.env.get_masks # action_mask_fn  should be action_masks_fn
         self.tensor_dim = self.env.encoding_dim
         self.action_dim = self.env.action_dim
         
@@ -57,7 +57,13 @@ class BaseAgent:
             with torch.no_grad():
                 pred = self.model(s_s)
                 
+                # Get forward masks for all states
                 forward_mask = tf(self.action_mask_fn(s_s.cpu().numpy(), "fwd"))
+                # # Print mask for first state only
+                # first_state = s_s[0].cpu().numpy().reshape(1, -1)  # Ensure it's 2D
+                # first_mask = self.action_mask_fn(first_state, "fwd")[0]
+                # print("forward_mask for first state:", first_mask)
+                
                 logits = torch.where(forward_mask.bool(), pred[..., :self.action_dim], -inf).log_softmax(1) # no stop implemented
                 action_probs = (1 - self.explore_ratio) * (logits / self.temp).softmax(1) + self.explore_ratio * (forward_mask) / (forward_mask + 1e-7).sum(1).unsqueeze(1)
 
@@ -95,9 +101,11 @@ class BaseAgent:
             batch_as[i] = torch.stack(batch_as[i])
             batch_rs[i] = torch.stack(batch_rs[i])
             assert batch_ss[i].shape[0] - batch_as[i].shape[0] == 1
+            
+        
+        # exit()
         
         return [batch_ss, batch_as, batch_steps, batch_rs]
-
 
 
 

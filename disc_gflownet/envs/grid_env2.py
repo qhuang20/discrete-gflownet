@@ -3,7 +3,7 @@ from .base_env import BaseEnv
 from ..utils.cache import LRUCache
 
 
-class GridEnv(BaseEnv): 
+class GridEnv2(BaseEnv): 
     def __init__(self, args):
         # super().__init__(args) 
         self.n_workers = args.n_workers 
@@ -35,6 +35,20 @@ class GridEnv(BaseEnv):
         diag_encoding = (self.grid_bound['diagonal']['max'] - self.grid_bound['diagonal']['min'] + 1) * n_diag_params
         base_encoding_dim = weight_encoding + diag_encoding
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
+        
+        # Steps per network size for progressive search
+        self.steps_per_network = args.steps_per_network
+    
+    def reset(self):
+        spatial_state = np.int32([0] * self.n_dims) # coord origin
+        self._step = 0
+        # Steps per network size for progressive search
+        self._step_in_current_network = 0
+        self.current_network_size = 1  # Reset to 1-node network
+        self._state = (0, spatial_state) if self.enable_time else spatial_state
+        return self.obs()
+    
+        
     
     def print_actions(self):
         print("-"*42)
@@ -129,49 +143,74 @@ class GridEnv(BaseEnv):
     def _get_action_mask(self, state, is_forward=True):
         # Extract spatial state if time is enabled
         spatial_state = state[1] if self.enable_time else state
-        
         mask = np.zeros(self.action_dim, dtype=bool)
-        
         n_weight_params = self.n_nodes * self.n_nodes
+                
         
-        # Handle weight actions
+        # Simple masking logic based on current network size
+        # For a network of size k, we allow actions on specific weights
+        allowed_weight_indices = []
+        
+        if self.current_network_size == 1:
+            # For 1-node network, only allow action on w1
+            allowed_weight_indices = [0]
+        elif self.current_network_size == 2:
+            # For 2-node network, allow actions on w2, w3, w4
+            allowed_weight_indices = [1, 2, 3]
+        else:
+            # For k-node network (k > 2), allow actions on weights corresponding to the new node
+            prev_weights_count = (self.current_network_size - 1) ** 2
+            current_weights_count = self.current_network_size ** 2
+            allowed_weight_indices = list(range(prev_weights_count, current_weights_count))
+        
+        # Handle weight actions 
         weight_actions = len(self.actions_per_dim['weight'])
-        for dim in range(n_weight_params):
+        for dim_idx in allowed_weight_indices:
             for action_idx, action_val in enumerate(self.actions_per_dim['weight']):
-                mask_idx = dim * weight_actions + action_idx
+                mask_idx = dim_idx * weight_actions + action_idx
+                
+                # Skip if mask_idx is out of bounds
+                if mask_idx >= n_weight_params * weight_actions:
+                    continue
+                    
                 next_state = spatial_state.copy()
-                next_state[dim] += action_val if is_forward else -action_val
+                next_state[dim_idx] += action_val if is_forward else -action_val
                 
                 # Check sign consistency when enabled
                 if self.consistent_signs:
-                    current_val = spatial_state[dim]
+                    current_val = spatial_state[dim_idx]
                     if current_val > 0 and action_val <= 0:
                         continue
                     elif current_val < 0 and action_val >= 0:
                         continue
                 
-                if self._check_state_bounds(next_state[dim], is_weight=True):
+                if self._check_state_bounds(next_state[dim_idx], is_weight=True):
                     mask[mask_idx] = True
         
-        # Handle diagonal actions
+        # Handle diagonal actions  
         diag_actions = len(self.actions_per_dim['diagonal'])
         base_idx = n_weight_params * weight_actions
-        for dim in range(self.n_nodes):
-            for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
-                mask_idx = base_idx + dim * diag_actions + action_idx
-                next_state = spatial_state.copy()
-                next_state[dim + n_weight_params] += action_val if is_forward else -action_val
+        dim = self.current_network_size - 1  # 0-indexed, Only allow diagonal action for the current node
+        for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
+            mask_idx = base_idx + dim * diag_actions + action_idx
+            
+            # Skip if mask_idx is out of bounds
+            if mask_idx >= self.action_dim:
+                continue
                 
-                # Check sign consistency when enabled
-                if self.consistent_signs:
-                    current_val = spatial_state[dim + n_weight_params]
-                    if current_val > 0 and action_val <= 0:
-                        continue
-                    elif current_val < 0 and action_val >= 0:
-                        continue
-                
-                if self._check_state_bounds(next_state[dim + n_weight_params], is_weight=False):
-                    mask[mask_idx] = True
+            next_state = spatial_state.copy()
+            next_state[dim + n_weight_params] += action_val if is_forward else -action_val
+            
+            # Check sign consistency when enabled
+            if self.consistent_signs:
+                current_val = spatial_state[dim + n_weight_params]
+                if current_val > 0 and action_val <= 0:
+                    continue
+                elif current_val < 0 and action_val >= 0:
+                    continue
+            
+            if self._check_state_bounds(next_state[dim + n_weight_params], is_weight=False):
+                mask[mask_idx] = True
                     
         return mask
 
@@ -203,6 +242,13 @@ class GridEnv(BaseEnv):
             self._state[dim] += action_value
             
         self._step += 1
+        self._step_in_current_network += 1
+        
+        # Check if we need to move to the next network size
+        max_steps_for_current = self.steps_per_network.get(self.current_network_size, 0)
+        if self._step_in_current_network >= max_steps_for_current and self.current_network_size < self.n_nodes:
+            self.current_network_size += 1
+            self._step_in_current_network = 0
 
         # Episode ends if we've used all steps OR if there are no valid actions left
         forward_mask = self.get_forward_mask(self._state)
@@ -223,5 +269,6 @@ class GridEnv(BaseEnv):
             reward = -1
             
         return self.obs(), reward, done
+
 
 

@@ -19,6 +19,7 @@ from disc_gflownet.utils.cache import LRUCache
 from disc_gflownet.agents.tbflownet_agent import TBFlowNetAgent
 from disc_gflownet.agents.dbflownet_agent import DBFlowNetAgent
 from disc_gflownet.envs.grid_env import GridEnv
+from disc_gflownet.envs.grid_env2 import GridEnv2
 from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
@@ -75,7 +76,8 @@ def main(args):
     set_device(torch.device(args.device))
     
     # Environment setup 
-    envs = [GridEnv(args) for _ in range(args.envsize)]
+    # envs = [GridEnv(args) for _ in range(args.envsize)]
+    envs = [GridEnv2(args) for _ in range(args.envsize)]
     
     # Agent setup
     if args.method == 'tb':
@@ -101,15 +103,9 @@ def main(args):
     ep_last_state_counts = {} # Counts occurrences of each episode last state.
     ep_last_state_trajectories = {}  # Store trajectories (states, actions, rewards) for each last state
     try:
-        for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):
+        for i in tqdm(range(args.n_train_steps + 1), disable=not args.progress):            
             experiences = agent.sample_batch_episodes(args.mbsize)
-            
-            # print("Experiences shape:")
-            # print("batch_ss shape:", [x.shape for x in experiences[0]])
-            # print("batch_steps:", [x for x in experiences[2]])
-            # print("batch_rs shape:", [x.shape for x in experiences[3]])
 
-            
             if args.n_workers > 1: 
                 # print("Start Multiprocessing !") 
                 curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
@@ -182,7 +178,7 @@ if __name__ == '__main__':
     # argparser.add_argument('--log_freq', type=int, default=100) 
     argparser.add_argument('--log_freq', type=int, default=1000) 
     argparser.add_argument('--log_flag', type=bool, default=True)
-    argparser.add_argument('--mbsize', type=int, default=8)
+    argparser.add_argument('--mbsize', type=int, default=8) 
     
     # Model 
     # argparser.add_argument('--method', type=str, default='tb') 
@@ -203,9 +199,6 @@ if __name__ == '__main__':
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
     argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func)
-    argparser.add_argument('--n_steps', type=int, default=55)  # 11*9 vs 8*9
-    # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
-    argparser.add_argument('--n_dims', type=int, default=3**2+3)
     argparser.add_argument('--grid_bound', type=dict, default={
         'weight': {'min': -200, 'max': 200},     # For the 9 weight parameters
         'diagonal': {'min': -20, 'max': 20},    # For the 3 diagonal factors
@@ -214,6 +207,16 @@ if __name__ == '__main__':
         'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
         'diagonal': [1, 5, -1, -5],         # For the 3 diagonal factors
     })
+    
+    # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
+    # argparser.add_argument('--n_steps', type=int, default=2+6+10) 
+    # argparser.add_argument('--n_dims', type=int, default=3**2+3)
+    # argparser.add_argument('--steps_per_network', type=dict, default={1:2, 2:6, 3:10})
+    
+    argparser.add_argument('--n_steps', type=int, default=8+24+40) 
+    argparser.add_argument('--n_dims', type=int, default=3**2+3)
+    argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
+    
 
     args = argparser.parse_args()
     main(args)
