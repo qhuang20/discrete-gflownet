@@ -213,10 +213,13 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_dims', type=int, default=3**2+3)
     # argparser.add_argument('--steps_per_network', type=dict, default={1:2, 2:6, 3:10})
     
-    argparser.add_argument('--n_steps', type=int, default=8+24+40) 
-    argparser.add_argument('--n_dims', type=int, default=3**2+3)
-    argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
-    
+    # argparser.add_argument('--n_steps', type=int, default=8+24+40) 
+    # argparser.add_argument('--n_dims', type=int, default=3**2+3)
+    # argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
+        
+    argparser.add_argument('--n_steps', type=int, default=9*3) 
+    argparser.add_argument('--n_dims', type=int, default=9**2+9)
+    argparser.add_argument('--steps_per_network', type=dict, default={1:3, 2:3, 3:3, 4:3, 5:3, 6:3, 7:3, 8:3, 9:3})
 
     args = argparser.parse_args()
     main(args)
