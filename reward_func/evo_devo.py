@@ -190,8 +190,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     s_values = np.zeros(n_nodes)
     for i in range(n_nodes):
         s_values[i] = 1.2 - 0.1 * i
-        if s_values[i] < 0.1:  # Set a minimum value
-            s_values[i] = 0.1
+        if s_values[i] < 0.6:  # Set a minimum value
+            s_values[i] = 0.6
     
     # System parameters - moved to constants for faster access
     N_CELLS = 100
@@ -215,7 +215,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     # Fixed parameters
     D = np.diag(d_values) / DIAGONAL_SCALE  # Scale diagonal values
     D_ONES = D @ np.ones(n_nodes)
-    A, B = 0.1, 0.2
+    # A, B = 0.1, 0.2
+    A, B = 0.1/2.5, 0.2/2.5
     S = s_values  # Decay rates
     
     # Pre-compute positions array
@@ -312,142 +313,6 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     
     return calculate_reward(x1_concentration)
 
-
-
-
-
-
-# def somitogenesis_reward_func2(state, plot=False, ax=None):
-#     """
-#     Calculate reward based on gene expression pattern simulation.
-    
-#     Args:
-#         state: 1D array containing weights (w), diagonal factors (d), and decay rates (s)
-#               For 3 nodes: 9 weights + 3 d values + 3 s values = 15 total parameters
-#         plot: bool, whether to plot the heatmap (default: False)
-#         ax: matplotlib axes object for plotting in a grid (default: None)
-        
-#     Returns:
-#         float: Reward value based on pattern formation and stability
-#     """
-    
-#     # Extract w, d, s parameters from state
-#     n_nodes = 3  # Fixed for this version
-#     n_weights = n_nodes * n_nodes
-#     weights = state[:n_weights]
-#     d_values = state[n_weights:n_weights+n_nodes]
-#     s_values = state[n_weights+n_nodes:]
-    
-#     # System parameters - moved to constants for faster access
-#     N_CELLS = 100
-#     N_SIMTIME = 90
-#     N_TIMEPOINTS = 200
-#     DELTA_SOMITE = 0.1
-#     DELTA_STABILITY = 0.02
-#     STABILITY_WEIGHT = 1.0
-#     STABILITY_POWER = 5  # smaller tolerates waves more 
-#     RTOL = 1e-3
-#     ATOL = 1e-6
-#     WEIGHT_SCALE = 20
-#     N_BOUNDARY_CHECKS = 3
-    
-#     # Pre-compute initial conditions
-#     x0 = np.full(N_CELLS * n_nodes, 0.1)  # Faster than tile
-    
-#     # Fixed parameters
-#     D = np.diag(d_values)  # Diagonal matrix with d values
-#     D_ONES = D @ np.ones(n_nodes)
-#     A, B = 0.1, 0.2
-#     S = np.array(s_values)  # Decay rates
-    
-#     # Pre-compute positions array
-#     positions = np.arange(N_CELLS).reshape(-1, 1)
-
-#     def n_node_system(t, x, W):
-#         """System dynamics with node-specific parameters"""
-#         x_reshaped = x.reshape(-1, n_nodes)
-#         g = np.minimum(np.exp(A * positions - B * t), 1)
-#         z = g * D_ONES + x_reshaped @ W.T
-#         sigmoid_z = 1 / (1 + np.exp(-z))
-#         decay = x_reshaped * S  # Element-wise multiplication with decay rates
-#         return (sigmoid_z - decay).flatten()
-
-#     def simulate_system(weights):
-#         """Simulate with optimized matrix operations"""
-#         W = weights_to_matrix(weights) / WEIGHT_SCALE
-#         t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
-        
-#         sol = solve_ivp(
-#             lambda t, x: n_node_system(t, x, W),
-#             (t[0], t[-1]),
-#             x0,
-#             t_eval=t,
-#             method='RK45',
-#             rtol=RTOL,
-#             atol=ATOL
-#         )
-#         return t, sol.y.T.reshape(len(t), N_CELLS, n_nodes)
-
-#     def count_boundaries(concentrations):
-#         """Count boundaries with minimum distance between them"""
-#         n_boundaries = 0
-#         last_boundary_pos = -float('inf')  # Position of last detected boundary
-        
-#         for i in range(len(concentrations)-1):
-#             diff = abs(concentrations[i+1] - concentrations[i])
-#             if diff > DELTA_SOMITE:
-#                 # Only count if far enough from last boundary (minimum 4 cells apart)
-#                 if i - last_boundary_pos >= 4: 
-#                     n_boundaries += 1
-#                     last_boundary_pos = i
-#         return n_boundaries
-
-#     def calculate_reward(x1_concentration):
-#         """Optimized reward calculation"""
-#         mid_idx = len(x1_concentration) // 2
-#         check_indices = np.linspace(mid_idx, len(x1_concentration)-1, N_BOUNDARY_CHECKS, dtype=int)
-        
-#         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
-#         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
-        
-#         if total_boundaries <= 2:  # to prevent slope 
-#             return 0.0
-            
-#         # Vectorized stability calculation
-#         second_half = x1_concentration[mid_idx:]
-#         changes = np.abs(np.diff(second_half, axis=0)) > DELTA_STABILITY
-#         total_changes = np.sum(changes)
-#         max_possible_changes = (len(second_half) - 1) * N_CELLS
-        
-#         stability_reward = round(STABILITY_WEIGHT * (1 - total_changes / max_possible_changes), 3)
-#         if plot: print(f"Stability reward: {stability_reward}")
-        
-#         return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
-
-#     def plot_heatmap(x1_concentration, t, ax=None):
-#         """Plot heatmap (unchanged since plotting is not performance critical)"""
-#         if ax is None:
-#             plt.figure(figsize=(10, 6))
-#             ax = plt.gca()
-            
-#         im = ax.imshow(x1_concentration.T, aspect='auto', cmap='Blues',
-#                       extent=[0, N_SIMTIME, 100, 0])
-#         plt.colorbar(im, ax=ax, label='x1 Concentration')
-#         ax.set_xlabel('Time')
-#         ax.set_ylabel('Position')
-#         ax.set_title('x1 Concentration Across Time and Space')
-        
-#         if ax is None:
-#             plt.show()
-
-#     # Main execution
-#     t, sol = simulate_system(weights)
-#     x1_concentration = sol[:, :, 0]
-    
-#     if plot:
-#         plot_heatmap(x1_concentration, t, ax)
-    
-#     return calculate_reward(x1_concentration)
 
 
 

@@ -217,9 +217,9 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_dims', type=int, default=3**2+3)
     # argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
         
-    argparser.add_argument('--n_steps', type=int, default=9*3) 
-    argparser.add_argument('--n_dims', type=int, default=9**2+9)
-    argparser.add_argument('--steps_per_network', type=dict, default={1:3, 2:3, 3:3, 4:3, 5:3, 6:3, 7:3, 8:3, 9:3})
+    argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*4) 
+    argparser.add_argument('--n_dims', type=int, default=7**2+7)
+    argparser.add_argument('--steps_per_network', type=dict, default={1:1*4, 2:3*4, 3:5*4, 4:7*4, 5:9*4, 6:11*4, 7:13*4}) 
 
     args = argparser.parse_args()
     main(args)
