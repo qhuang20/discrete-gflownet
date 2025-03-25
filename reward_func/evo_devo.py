@@ -183,9 +183,10 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     # n_nodes = int((-2 + (4 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + 2n - len(state) = 0 
     n_nodes = int((-1 + (1 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + n - len(state) = 0 
     n_weights = n_nodes * n_nodes
+    
     weights = state[:n_weights]
     d_values = state[n_weights:n_weights+n_nodes]
-    
+
     # Generate decreasing s_values with the correct length based on n_nodes
     s_values = np.zeros(n_nodes)
     for i in range(n_nodes):
@@ -266,6 +267,34 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
                     last_boundary_pos = i
         return n_boundaries
 
+    def calculate_entropy(w):
+        w = w.ravel()
+        w = np.abs(w)
+        w_sum = np.sum(w)
+        if w_sum == 0:
+            w_tilde = np.ones_like(w)/len(w)
+        else:
+            w_tilde = w/w_sum
+        
+        entropy = -np.sum(w_tilde * np.log(w_tilde+1E-10))
+        print(w_tilde)
+        entropy_max = -len(w_tilde) * (1.0/len(w_tilde)) * np.log((1.0/len(w_tilde)))
+        
+        if entropy_max <= 0:
+            entropy_max = 1
+        entropy = entropy/entropy_max
+
+        return entropy
+
+
+    def calculate_partial_entropy(w, n_nodes):
+        entropy = 0
+
+        for i in range(n_nodes):
+            entropy += calculate_entropy(w[i*n_nodes:(i+1)*n_nodes])/n_nodes
+
+        return entropy
+
     def calculate_reward(x1_concentration):
         """Optimized reward calculation"""
         mid_idx = len(x1_concentration) // 2
@@ -273,10 +302,14 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         
         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
+
+        entropy = calculate_partial_entropy(weights, n_nodes) # CALCULATING ENTROPY
+
+        entropy_reward = 10*(1 - entropy) # strength factor 
         
         if total_boundaries <= 2:  # to prevent slope 
-            return 0.0
-            
+            return 0.0 + entropy_reward
+        
         # Vectorized stability calculation
         second_half = x1_concentration[mid_idx:]
         changes = np.abs(np.diff(second_half, axis=0)) > DELTA_STABILITY
@@ -285,8 +318,9 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         
         stability_reward = round(STABILITY_WEIGHT * (1 - total_changes / max_possible_changes), 3)
         if plot: print(f"Stability reward: {stability_reward}")
-        
-        return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
+
+
+        return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3) + entropy_rewward
 
     def plot_heatmap(x1_concentration, t, ax=None):
         """Plot heatmap (unchanged since plotting is not performance critical)"""
