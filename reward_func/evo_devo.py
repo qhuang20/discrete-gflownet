@@ -166,6 +166,9 @@ def oscillator_reward_func(weights, plot=False):
     return calculate_reward(sol)
 
 
+
+
+
 def somitogenesis_reward_func(state, plot=False, ax=None):
     """
     Calculate reward based on gene expression pattern simulation.
