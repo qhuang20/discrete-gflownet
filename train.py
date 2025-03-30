@@ -200,12 +200,12 @@ if __name__ == '__main__':
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
     argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func)
     argparser.add_argument('--grid_bound', type=dict, default={
-        'weight': {'min': -200, 'max': 200},     # For the 9 weight parameters
-        'diagonal': {'min': -20, 'max': 20},    # For the 3 diagonal factors
+        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
+        'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
     })
     argparser.add_argument('--actions_per_dim', type=dict, default={
         'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
-        'diagonal': [1, 5, -1, -5],         # For the 3 diagonal factors
+        'diagonal': [1, 5, 25, -1, -5, -25],         # For the 3 diagonal factors
     })
     
     # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic

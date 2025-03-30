@@ -147,21 +147,19 @@ class GridEnv2(BaseEnv):
         n_weight_params = self.n_nodes * self.n_nodes
                 
         
-        # Simple masking logic based on current network size
-        # For a network of size k, we allow actions on specific weights
+        # Masking logic based on current network size
+        # For a network of size k, we allow actions on all weights up to the current size
         allowed_weight_indices = []
         
         if self.current_network_size == 1:
             # For 1-node network, only allow action on w1
             allowed_weight_indices = [0]
         elif self.current_network_size == 2:
-            # For 2-node network, allow actions on w2, w3, w4
-            allowed_weight_indices = [1, 2, 3]
+            # For 2-node network, allow actions on w1, w2, w3, w4
+            allowed_weight_indices = [0, 1, 2, 3]
         else:
-            # For k-node network (k > 2), allow actions on weights corresponding to the new node
-            prev_weights_count = (self.current_network_size - 1) ** 2
-            current_weights_count = self.current_network_size ** 2
-            allowed_weight_indices = list(range(prev_weights_count, current_weights_count))
+            # For k-node network (k > 2), allow actions on all weights up to current size
+            allowed_weight_indices = list(range(self.current_network_size ** 2))
         
         # Handle weight actions 
         weight_actions = len(self.actions_per_dim['weight'])
@@ -187,30 +185,30 @@ class GridEnv2(BaseEnv):
                 if self._check_state_bounds(next_state[dim_idx], is_weight=True):
                     mask[mask_idx] = True
         
-        # Handle diagonal actions  
+        # Handle diagonal actions - allow all diagonals up to current network size
         diag_actions = len(self.actions_per_dim['diagonal'])
         base_idx = n_weight_params * weight_actions
-        dim = self.current_network_size - 1  # 0-indexed, Only allow diagonal action for the current node
-        for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
-            mask_idx = base_idx + dim * diag_actions + action_idx
-            
-            # Skip if mask_idx is out of bounds
-            if mask_idx >= self.action_dim:
-                continue
+        for dim in range(self.current_network_size):  # Allow all diagonals up to current size
+            for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
+                mask_idx = base_idx + dim * diag_actions + action_idx
                 
-            next_state = spatial_state.copy()
-            next_state[dim + n_weight_params] += action_val if is_forward else -action_val
-            
-            # Check sign consistency when enabled
-            if self.consistent_signs:
-                current_val = spatial_state[dim + n_weight_params]
-                if current_val > 0 and action_val <= 0:
+                # Skip if mask_idx is out of bounds
+                if mask_idx >= self.action_dim:
                     continue
-                elif current_val < 0 and action_val >= 0:
-                    continue
-            
-            if self._check_state_bounds(next_state[dim + n_weight_params], is_weight=False):
-                mask[mask_idx] = True
+                    
+                next_state = spatial_state.copy()
+                next_state[dim + n_weight_params] += action_val if is_forward else -action_val
+                
+                # Check sign consistency when enabled
+                if self.consistent_signs:
+                    current_val = spatial_state[dim + n_weight_params]
+                    if current_val > 0 and action_val <= 0:
+                        continue
+                    elif current_val < 0 and action_val >= 0:
+                        continue
+                
+                if self._check_state_bounds(next_state[dim + n_weight_params], is_weight=False):
+                    mask[mask_idx] = True
                     
         return mask
 
@@ -269,6 +267,5 @@ class GridEnv2(BaseEnv):
             reward = -1
             
         return self.obs(), reward, done
-
 
 

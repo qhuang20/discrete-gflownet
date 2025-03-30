@@ -203,12 +203,13 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     DELTA_SOMITE = 0.1
     DELTA_STABILITY = 0.02
     STABILITY_WEIGHT = 1.0
+    SPARSITY_WEIGHT = 0.8 
     STABILITY_POWER = 5  # smaller tolerates waves more 
     N_BOUNDARY_CHECKS = 3
     RTOL = 1e-3
     ATOL = 1e-6
-    WEIGHT_SCALE = 20 
-    # WEIGHT_SCALE = 10 
+    # WEIGHT_SCALE = 20 
+    WEIGHT_SCALE = 10 
     DIAGONAL_SCALE = 10 
     
     
@@ -269,6 +270,24 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
                     last_boundary_pos = i
         return n_boundaries
 
+    def sparsity_reward_combined(state, w1=0.0, w2=1.0):
+        # Entropy-based component
+        # Normalize values to probabilities
+        abs_values = np.abs(state)
+        if sum(abs_values) == 0:
+            entropy_reward = 1.0  # maximum sparsity
+        else:
+            probs = abs_values / sum(abs_values)
+            # Calculate entropy (lower entropy = more sparse)
+            entropy = -sum(p * np.log(p) for p in probs if p > 0)
+            entropy_reward = 1 / (1 + entropy)  # transform to reward
+        
+        # L0 component (explicitly rewards zeros)
+        n_zeros = sum(1 for x in state if x == 0)
+        l0_reward = n_zeros / len(state)
+        
+        return w1 * entropy_reward + w2 * l0_reward
+
     def calculate_reward(x1_concentration):
         """Optimized reward calculation"""
         mid_idx = len(x1_concentration) // 2
@@ -277,8 +296,12 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
         
+        # Calculate sparsity reward - always available
+        sparsity_reward = round(SPARSITY_WEIGHT * sparsity_reward_combined(weights), 3) 
+        if plot: print(f"Sparsity reward: {sparsity_reward}")
+        
         if total_boundaries <= 2:  # to prevent slope 
-            return 0.0
+            return sparsity_reward  # Return sparsity reward even when boundaries are insufficient
             
         # Vectorized stability calculation
         second_half = x1_concentration[mid_idx:]
@@ -289,7 +312,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         stability_reward = round(STABILITY_WEIGHT * (1 - total_changes / max_possible_changes), 3)
         if plot: print(f"Stability reward: {stability_reward}")
         
-        return round(total_boundaries * (stability_reward ** STABILITY_POWER), 3)
+        return round(total_boundaries * (stability_reward ** STABILITY_POWER) + sparsity_reward, 3)
 
     def plot_heatmap(x1_concentration, t, ax=None):
         """Plot heatmap (unchanged since plotting is not performance critical)"""
