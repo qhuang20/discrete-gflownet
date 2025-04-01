@@ -185,7 +185,7 @@ class GridEnv2(BaseEnv):
                 if self._check_state_bounds(next_state[dim_idx], is_weight=True):
                     mask[mask_idx] = True
         
-        # Handle diagonal actions - allow all diagonals up to current network size
+        # Handle diagonal actions - allow all diagonals up to current network size 
         diag_actions = len(self.actions_per_dim['diagonal'])
         base_idx = n_weight_params * weight_actions
         for dim in range(self.current_network_size):  # Allow all diagonals up to current size

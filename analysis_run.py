@@ -39,7 +39,7 @@ parser.add_argument('--run_dir', type=str, required=True, help='Directory contai
 parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of trajectory to animate')
 parser.add_argument('--reward_threshold', type=float, default=0.1, help='Reward threshold for mode counting')
 parser.add_argument('--top_k', type=int, default=10, help='Number of top states to track')
-parser.add_argument('--top_m', type=int, default=12, help='Number of top states to plot') 
+parser.add_argument('--top_m', type=int, default=24, help='Number of top states to plot') 
 args = parser.parse_args()
 
 # Load checkpoint
@@ -357,82 +357,84 @@ with open(output_path, 'a') as f:
 
 
 
-"""Create animation for the top trajectories by average reward"""
-from graph.graph import draw_network_motif
-import imageio
+# """Create animation for the top trajectories by average reward"""
+# from graph.graph import draw_network_motif
+# import imageio
 
-# Get trajectories sorted by avg average trajectory rewards
-top_reward_final_states = sorted(
-    final_state_avg_rewards.items(),
-    key=lambda x: x[1], 
-    reverse=True
-)
+# # Get trajectories sorted by avg average trajectory rewards
+# top_reward_final_states = sorted(
+#     final_state_avg_rewards.items(),
+#     key=lambda x: x[1], 
+#     reverse=True
+# )
 
-# # Get the specified trajectory
-# final_state = top_reward_final_states[args.trajectory_idx][0]
-# trajectories = ep_last_state_trajectories[final_state]
-# traj = trajectories[0]  # Take first trajectory for this final state
-# states = traj['states']
-# rewards = [r[0] for r in traj['rewards']]
+# # # Get the specified trajectory
+# # final_state = top_reward_final_states[args.trajectory_idx][0]
+# # trajectories = ep_last_state_trajectories[final_state]
+# # traj = trajectories[0]  # Take first trajectory for this final state
+# # states = traj['states']
+# # rewards = [r[0] for r in traj['rewards']]
 
-def create_frames(states, rewards):
-    frames = []
-    for frame, (state, reward) in enumerate(zip(states, rewards)):
-        # Create figure with two subplots side by side with width ratio 1:2
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22, 10), gridspec_kw={'width_ratios': [1, 1.5]})
-        fig.suptitle("Network Motif and Somite Pattern Evolution")
+# def create_frames(states, rewards):
+#     frames = []
+#     for frame, (state, reward) in enumerate(zip(states, rewards)):
+#         # Create figure with two subplots side by side with width ratio 1:2
+#         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22, 10), gridspec_kw={'width_ratios': [1, 1.5]})
+#         fig.suptitle("Network Motif and Somite Pattern Evolution")
         
-        # Draw network motif
-        draw_network_motif(state, ax=ax1)
-        ax1.set_title(f"Step {frame}: Network Motif")
+#         # Draw network motif
+#         draw_network_motif(state, ax=ax1)
+#         ax1.set_title(f"Step {frame}: Network Motif")
         
-        # Draw somite pattern
-        somitogenesis_reward_func(state, plot=True, ax=ax2)
-        ax2.set_title(f"Somite Pattern (reward: {reward:.3f})")
+#         # Draw somite pattern
+#         somitogenesis_reward_func(state, plot=True, ax=ax2)
+#         ax2.set_title(f"Somite Pattern (reward: {reward:.3f})")
         
-        plt.tight_layout()
+#         plt.tight_layout()
         
-        # Convert plot to image
-        fig.canvas.draw()
-        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
-        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-        frames.append(image)
-        plt.close(fig)
+#         # Convert plot to image
+#         fig.canvas.draw()
+#         image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+#         image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+#         frames.append(image)
+#         plt.close(fig)
         
-    return frames
+#     return frames
 
 
-# # Create the frames
-# frames = create_frames(states, rewards)
+# # # Create the frames
+# # frames = create_frames(states, rewards)
 
-# # Save as MP4 file
-# output_video = os.path.join(os.path.dirname(checkpoint_path), f"trajectory_evolution{args.trajectory_idx}.mp4")
-# imageio.mimsave(output_video, frames, fps=2)
-
-
-
+# # # Save as MP4 file
+# # output_video = os.path.join(os.path.dirname(checkpoint_path), f"trajectory_evolution{args.trajectory_idx}.mp4")
+# # imageio.mimsave(output_video, frames, fps=2)
 
 
 
 
-# Create animations for top 5 trajectories
-for idx in range(min(5, len(top_reward_final_states))):
-    final_state = top_reward_final_states[idx][0]
-    trajectories = ep_last_state_trajectories[final_state]
-    traj = trajectories[0]  # Take first trajectory for this final state
-    states = traj['states']
-    rewards = [r[0] for r in traj['rewards']]
+
+
+
+# # Create animations for top 5 trajectories
+# for idx in range(min(5, len(top_reward_final_states))):
+#     final_state = top_reward_final_states[idx][0]
+#     trajectories = ep_last_state_trajectories[final_state]
+#     traj = trajectories[0]  # Take first trajectory for this final state
+#     states = traj['states']
+#     rewards = [r[0] for r in traj['rewards']]
     
-    print(f"Creating animation for trajectory {idx+1} of {min(5, len(top_reward_final_states))}")
+#     print(f"Creating animation for trajectory {idx+1} of {min(5, len(top_reward_final_states))}")
     
-    # Create the frames
-    frames = create_frames(states, rewards)
+#     # Create the frames
+#     frames = create_frames(states, rewards)
     
-    # Save as MP4 file
-    output_video = os.path.join(os.path.dirname(checkpoint_path), f"trajectory_evolution_{idx+1}.mp4")
-    imageio.mimsave(output_video, frames, fps=2)
-    print(f"Saved animation to: {output_video}")
+#     # Save as MP4 file
+#     output_video = os.path.join(os.path.dirname(checkpoint_path), f"trajectory_evolution_{idx+1}.mp4")
+#     imageio.mimsave(output_video, frames, fps=2)
+#     print(f"Saved animation to: {output_video}")
 
-print("All animations completed!")
+# print("All animations completed!")
+
+
 
 

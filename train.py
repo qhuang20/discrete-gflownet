@@ -142,8 +142,8 @@ def main(args):
             if i % args.log_freq == 0 and args.log_flag:
                 log_training_loop(log_filename, agent, i, ep_last_state_counts, ep_last_state_trajectories) 
 
-            # Save checkpoint every 1000 episodes
-            if i % 1000 == 0:
+            # Save checkpoint every log_freq episodes
+            if i % args.log_freq == 0:
                 save_checkpoint(run_dir, agent, opt, losses, zs, i, ep_last_state_counts, ep_last_state_trajectories)
                 
     except KeyboardInterrupt:
@@ -172,11 +172,11 @@ if __name__ == '__main__':
     argparser.add_argument('--progress', type=bool, default=True)
     argparser.add_argument('--seed', type=int, default=42) 
     # argparser.add_argument('--n_train_steps', type=int, default=1000) 
-    argparser.add_argument('--n_train_steps', type=int, default=2000) 
+    argparser.add_argument('--n_train_steps', type=int, default=1000) 
     argparser.add_argument('--n_workers', type=int, default=10) 
     argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
-    # argparser.add_argument('--log_freq', type=int, default=100) 
-    argparser.add_argument('--log_freq', type=int, default=1000) 
+    argparser.add_argument('--log_freq', type=int, default=100) 
+    # argparser.add_argument('--log_freq', type=int, default=1000) 
     argparser.add_argument('--log_flag', type=bool, default=True)
     argparser.add_argument('--mbsize', type=int, default=8) 
     
@@ -198,7 +198,11 @@ if __name__ == '__main__':
     argparser.add_argument('--min_reward', type=float, default=1e-3)  # 1e-6
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func)
+    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
+    # argparser.add_argument('--grid_bound', type=dict, default={
+    #     'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
+    #     'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
+    # })
     argparser.add_argument('--grid_bound', type=dict, default={
         'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
         'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
@@ -207,6 +211,10 @@ if __name__ == '__main__':
         'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
         'diagonal': [1, 5, 25, -1, -5, -25],         # For the 3 diagonal factors
     })
+    # argparser.add_argument('--actions_per_dim', type=dict, default={
+    #     'weight': [5, 25, -5, -25],   # For the 9 weight parameters
+    #     'diagonal': [5, 25, -5, -25],         # For the 3 diagonal factors
+    # })
     
     # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
     # argparser.add_argument('--n_steps', type=int, default=2+6+10) 

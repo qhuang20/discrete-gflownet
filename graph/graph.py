@@ -108,7 +108,7 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
     """
     # Grid layout parameters
     node_size = 200
-    max_cols = 3  # Reduced to fit both motif and somite plots side by side
+    max_cols = 6  # Reduced to fit both motif and somite plots side by side
     n_plots = len(test_states_list)
     n_cols = min(max_cols, n_plots)
     n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)  # Double rows to fit somite plots
@@ -180,6 +180,7 @@ if __name__ == "__main__":
         # [1, -166, 119, -87, 58, -85, -111, -60, 78, 1, 1, 1, 1, 1, 1],
         # [155, -200, 73, -49, 100, -103, -127, -19, 27, 1, 1, 1, 1, 1, 1],
         # [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+        [80, 66, -86, -32, 37, -7, -1, -50, 11, 55, -11, -7, -50, -2, -11, 6, 0, -5, -5, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -65, 51, -12, -25, 0, 0, 0]
     ]
     
     plot_network_motifs_and_somites(test_states_list)

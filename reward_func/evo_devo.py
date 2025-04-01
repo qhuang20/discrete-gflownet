@@ -21,7 +21,7 @@ def coord_reward_func(state):
 
 def sigmoid(z):
     """Sigmoid activation function with overflow protection"""
-    return 1 / (1 + np.exp(-np.clip(z, -5000, 5000)))
+    return 1 / (1 + np.exp(-np.clip(z, -500, 500))) 
 
 
 def weights_to_matrix(weights, plot=False, ax=None):
@@ -203,13 +203,14 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     DELTA_SOMITE = 0.1
     DELTA_STABILITY = 0.02
     STABILITY_WEIGHT = 1.0
-    SPARSITY_WEIGHT = 0.8 
+    SPARSITY_WEIGHT = 0.8   # 0 - 0.8 (max) 
     STABILITY_POWER = 5  # smaller tolerates waves more 
     N_BOUNDARY_CHECKS = 3
     RTOL = 1e-3
     ATOL = 1e-6
-    # WEIGHT_SCALE = 20 
-    WEIGHT_SCALE = 10 
+    # WEIGHT_SCALE = 10 
+    # WEIGHT_SCALE = 5 
+    WEIGHT_SCALE = 1 
     DIAGONAL_SCALE = 10 
     
     
@@ -220,7 +221,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     D = np.diag(d_values) / DIAGONAL_SCALE  # Scale diagonal values
     D_ONES = D @ np.ones(n_nodes)
     # A, B = 0.1, 0.2
-    A, B = 0.1/2.5, 0.2/2.5
+    A, B = 0.1/2.5, 0.2/2.5 
     S = s_values  # Decay rates
     
     # Pre-compute positions array
@@ -235,14 +236,14 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         x_reshaped = x.reshape(-1, n_nodes)
         g = np.minimum(np.exp(A * positions - B * t), 1)
         z = g * D_ONES + x_reshaped @ W.T
-        sigmoid_z = 1 / (1 + np.exp(-z))
-        # Ensure S has the correct shape for broadcasting
+        sigmoid_z = sigmoid(z)  # Use the protected sigmoid function instead
+        # sigmoid_z = 1 / (1 + np.exp(-z)) 
         decay = x_reshaped * S  # S already has shape (n_nodes,) which broadcasts correctly with (N_CELLS, n_nodes)
         return (sigmoid_z - decay).flatten()
 
     def simulate_system(weights):
         """Simulate with optimized matrix operations"""
-        W = weights_to_matrix(weights) / WEIGHT_SCALE
+        W = weights_to_matrix(weights) / WEIGHT_SCALE     
         t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
         
         sol = solve_ivp(
