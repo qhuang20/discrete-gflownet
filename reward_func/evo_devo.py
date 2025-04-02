@@ -21,7 +21,10 @@ def coord_reward_func(state):
 
 def sigmoid(z):
     """Sigmoid activation function with overflow protection"""
-    return 1 / (1 + np.exp(-np.clip(z, -500, 500))) 
+    # return 1 / (1 + np.exp(-np.clip(z, -500, 500))) 
+    # print("z:", z)
+    # exit()
+    return 1 / (1 + np.exp(5 - np.clip(z, -500, 500))) 
 
 
 def weights_to_matrix(weights, plot=False, ax=None):
@@ -188,13 +191,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     n_weights = n_nodes * n_nodes
     weights = state[:n_weights]
     d_values = state[n_weights:n_weights+n_nodes]
-    
-    # Generate decreasing s_values with the correct length based on n_nodes
-    s_values = np.zeros(n_nodes)
-    for i in range(n_nodes):
-        s_values[i] = 1.2 - 0.1 * i
-        if s_values[i] < 0.6:  # Set a minimum value
-            s_values[i] = 0.6
+    s_values = np.ones(n_nodes) # Generate s_values with all 1s 
     
     # System parameters - moved to constants for faster access
     N_CELLS = 100
@@ -210,7 +207,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     ATOL = 1e-6
     # WEIGHT_SCALE = 10 
     # WEIGHT_SCALE = 5 
-    WEIGHT_SCALE = 1 
+    WEIGHT_SCALE = 10 
     DIAGONAL_SCALE = 10 
     
     
@@ -227,9 +224,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     # Pre-compute positions array
     positions = np.arange(N_CELLS).reshape(-1, 1)
 
-    def weights_to_matrix(weights):
-        """Convert flat weights to matrix form"""
-        return np.array(weights).reshape(n_nodes, n_nodes)
+
 
     def n_node_system(t, x, W):
         """System dynamics with node-specific parameters"""
@@ -239,6 +234,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         sigmoid_z = sigmoid(z)  # Use the protected sigmoid function instead
         # sigmoid_z = 1 / (1 + np.exp(-z)) 
         decay = x_reshaped * S  # S already has shape (n_nodes,) which broadcasts correctly with (N_CELLS, n_nodes)
+        # print(W)  # Print the weight matrix
         return (sigmoid_z - decay).flatten()
 
     def simulate_system(weights):
@@ -331,16 +327,20 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         
         if ax is None:
             plt.show()
-
     # Main execution
     t, sol = simulate_system(weights)
     x1_concentration = sol[:, :, 0]
+    # x1_concentration = sol[:, :, 2] 
     
+    # Print the last 5 values of the first cell for x1, x2, x3
     if plot:
+        # print("Last 5 values of first cell:")
+        # print(f"x1: {sol[-5:, 0, 0]}")
+        # print(f"x2: {sol[-5:, 0, 1]}")
+        # print(f"x3: {sol[-5:, 0, 2]}")
         plot_heatmap(x1_concentration, t, ax)
     
     return calculate_reward(x1_concentration)
-
 
 
 

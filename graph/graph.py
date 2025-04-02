@@ -77,8 +77,8 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
     for i in range(n_nodes):
         for j in range(n_nodes):
             if weight_matrix[i, j] != 0:
-                # Fix edge direction: if wij, node i points to node j
-                edge = (i + 1, j + 1)  # Changed from (j + 1, i + 1)
+                # Fix edge direction: if wij, node j points to node i
+                edge = (j + 1, i + 1)  # Changed direction to match the requirement
                 G.add_edge(*edge, weight=weight_matrix[i, j])
                 edge_colors_dict[edge] = 'blue' if weight_matrix[i, j] < 0 else 'red'
                 # Clip weight to max_edge_weight and scale to width between 0.5 and 5
