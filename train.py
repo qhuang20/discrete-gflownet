@@ -76,8 +76,8 @@ def main(args):
     set_device(torch.device(args.device))
     
     # Environment setup 
-    # envs = [GridEnv(args) for _ in range(args.envsize)]
-    envs = [GridEnv2(args) for _ in range(args.envsize)]
+    envs = [GridEnv(args) for _ in range(args.envsize)]
+    # envs = [GridEnv2(args) for _ in range(args.envsize)]
     
     # Agent setup
     if args.method == 'tb':
@@ -193,6 +193,9 @@ if __name__ == '__main__':
     argparser.add_argument('--temp', type=float, default=1.0)
     argparser.add_argument('--uni_rand_pb', type=float, default=1.0) 
     
+    
+    
+    
     # Environment 
     argparser.add_argument('--envsize', type=int, default=8)
     argparser.add_argument('--min_reward', type=float, default=1e-3)  # 1e-6
@@ -216,7 +219,16 @@ if __name__ == '__main__':
         'diagonal': [5, 25, -5, -25],         # For the 3 diagonal factors
     })
     
+    
+
+    """GridEnv"""  # all at once
+    argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*1) 
+    argparser.add_argument('--n_dims', type=int, default=7**2+7)
+    argparser.add_argument('--max_nodes', type=int, default=3)  # Maximum number of nodes this subnetwork can have
     # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
+    
+    
+    """GridEnv2"""  # divide and conquer
     # argparser.add_argument('--n_steps', type=int, default=2+6+10) 
     # argparser.add_argument('--n_dims', type=int, default=3**2+3)
     # argparser.add_argument('--steps_per_network', type=dict, default={1:2, 2:6, 3:10})
@@ -224,11 +236,12 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_steps', type=int, default=8+24+40) 
     # argparser.add_argument('--n_dims', type=int, default=3**2+3)
     # argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
-        
-    argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*4) 
-    argparser.add_argument('--n_dims', type=int, default=7**2+7)
-    argparser.add_argument('--steps_per_network', type=dict, default={1:1*4, 2:3*4, 3:5*4, 4:7*4, 5:9*4, 6:11*4, 7:13*4}) 
+    
+    # argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*4) 
+    # argparser.add_argument('--n_dims', type=int, default=7**2+7)
+    # argparser.add_argument('--steps_per_network', type=dict, default={1:1*4, 2:3*4, 3:5*4, 4:7*4, 5:9*4, 6:11*4, 7:13*4}) 
 
+    
     args = argparser.parse_args()
     main(args)
 

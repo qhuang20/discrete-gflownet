@@ -17,6 +17,9 @@ class GridEnv(BaseEnv):
         # Infer n_nodes from n_dims by solving quadratic: n^2 + n - n_dims = 0
         self.n_nodes = int((-1 + (1 + 4*self.n_dims)**0.5) / 2)
         
+        # Maximum number of nodes this subnetwork can have
+        self.max_nodes = args.max_nodes
+        
         self.actions_per_dim = args.actions_per_dim # Dict with actions for weights and diagonals
         
         # Calculate total number of possible actions
@@ -134,9 +137,26 @@ class GridEnv(BaseEnv):
         
         n_weight_params = self.n_nodes * self.n_nodes
         
+        # Determine which weights to allow based on max_nodes
+        # For 1-node network, only allow action on w1
+        # For 2-node network, allow actions on w1, w2, w3, w4
+        # For k-node network (k > 2), allow actions on all weights up to current size
+        allowed_weights = []
+        
+        if self.max_nodes == 1:
+            allowed_weights = [0]  # Only w1
+        elif self.max_nodes == 2:
+            allowed_weights = [0, 1, 2, 3]  # w1, w2, w3, w4
+        else:
+            # For larger networks, allow all weights up to max_nodes^2
+            allowed_weights = list(range(self.max_nodes * self.max_nodes))
+        
         # Handle weight actions
         weight_actions = len(self.actions_per_dim['weight'])
-        for dim in range(n_weight_params):
+        for dim in allowed_weights:
+            if dim >= n_weight_params:
+                continue  # Skip if dimension is out of bounds
+                
             for action_idx, action_val in enumerate(self.actions_per_dim['weight']):
                 mask_idx = dim * weight_actions + action_idx
                 next_state = spatial_state.copy()
@@ -153,10 +173,10 @@ class GridEnv(BaseEnv):
                 if self._check_state_bounds(next_state[dim], is_weight=True):
                     mask[mask_idx] = True
         
-        # Handle diagonal actions
+        # Handle diagonal actions - only allow diagonals up to max_nodes
         diag_actions = len(self.actions_per_dim['diagonal'])
         base_idx = n_weight_params * weight_actions
-        for dim in range(self.n_nodes):
+        for dim in range(min(self.max_nodes, self.n_nodes)):
             for action_idx, action_val in enumerate(self.actions_per_dim['diagonal']):
                 mask_idx = base_idx + dim * diag_actions + action_idx
                 next_state = spatial_state.copy()
