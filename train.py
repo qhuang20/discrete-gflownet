@@ -202,30 +202,27 @@ if __name__ == '__main__':
     argparser.add_argument('--enable_time', type=bool, default=False)
     argparser.add_argument('--consistent_signs', type=bool, default=True) 
     argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
-    # argparser.add_argument('--grid_bound', type=dict, default={
-    #     'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
-    #     'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
-    # })
     argparser.add_argument('--grid_bound', type=dict, default={
         'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
         'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
     })
-    # argparser.add_argument('--actions_per_dim', type=dict, default={
-    #     'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
-    #     'diagonal': [1, 5, 25, -1, -5, -25],         # For the 3 diagonal factors
-    # })
     argparser.add_argument('--actions_per_dim', type=dict, default={
-        'weight': [5, 25, -5, -25],   # For the 9 weight parameters
-        'diagonal': [5, 25, -5, -25],         # For the 3 diagonal factors
+        # 'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
+        # 'diagonal': [1, 5, 25, -1, -5, -25],         # For the 3 diagonal factors
+        # 'weight': [5, 25, -5, -25],   # For the 9 weight parameters
+        # 'diagonal': [5, 25, -5, -25],         # For the 3 diagonal factors
+        'weight': [1, 5, -1, -5],   # For the 9 weight parameters
+        'diagonal': [1, 5, -1, -5],         # For the 3 diagonal factors
     })
     
     
 
     """GridEnv"""  # all at once
-    argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*1) 
-    argparser.add_argument('--n_dims', type=int, default=7**2+7)
-    argparser.add_argument('--max_nodes', type=int, default=3)  # Maximum number of nodes this subnetwork can have
-    # argparser.add_argument('--n_nodes', type=int, default=3) # not used, can be infered from n_dims by solve quadratic
+    argparser.add_argument('--n_dims', type=int, default=7**2+7)  # no need for --n_nodes, since it can be inferred from n_dims by solve quadratic equ
+    argparser.add_argument('--max_nodes', type=int, default=2)  # Maximum number of nodes this subnetwork can have
+    argparser.add_argument('--max_edges', type=int, default=4)  # Maximum number of di-edges (on w) this subnetwork can have, < self.max_nodes * self.max_nodes
+    argparser.add_argument('--n_steps', type=int, default=(2+4)*20-1)  # < (max_nodes + max_edges) * (grid_bound / max(actions_per_dim))
+    
     
     
     """GridEnv2"""  # divide and conquer
@@ -240,6 +237,7 @@ if __name__ == '__main__':
     # argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*4) 
     # argparser.add_argument('--n_dims', type=int, default=7**2+7)
     # argparser.add_argument('--steps_per_network', type=dict, default={1:1*4, 2:3*4, 3:5*4, 4:7*4, 5:9*4, 6:11*4, 7:13*4}) 
+
 
     
     args = argparser.parse_args()

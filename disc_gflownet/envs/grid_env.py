@@ -16,9 +16,10 @@ class GridEnv(BaseEnv):
         
         # Infer n_nodes from n_dims by solving quadratic: n^2 + n - n_dims = 0
         self.n_nodes = int((-1 + (1 + 4*self.n_dims)**0.5) / 2)
-        
         # Maximum number of nodes this subnetwork can have
         self.max_nodes = args.max_nodes
+        # Maximum number of di-edges (on w) this subnetwork can have, < self.max_nodes * self.max_nodes
+        self.max_edges = args.max_edges 
         
         self.actions_per_dim = args.actions_per_dim # Dict with actions for weights and diagonals
         
@@ -151,6 +152,9 @@ class GridEnv(BaseEnv):
             # For larger networks, allow all weights up to max_nodes^2
             allowed_weights = list(range(self.max_nodes * self.max_nodes))
         
+        # Count current non-zero edges to enforce max_edges constraint
+        non_zero_edges = sum(1 for i in range(n_weight_params) if spatial_state[i] != 0)
+        
         # Handle weight actions
         weight_actions = len(self.actions_per_dim['weight'])
         for dim in allowed_weights:
@@ -169,6 +173,11 @@ class GridEnv(BaseEnv):
                         continue
                     elif current_val < 0 and action_val >= 0:
                         continue
+                
+                # Check max_edges constraint - if adding a new edge
+                if spatial_state[dim] == 0 and next_state[dim] != 0:
+                    if non_zero_edges >= self.max_edges:
+                        continue  # Skip if we already have max edges
                 
                 if self._check_state_bounds(next_state[dim], is_weight=True):
                     mask[mask_idx] = True

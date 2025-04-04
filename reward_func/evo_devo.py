@@ -177,7 +177,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     Calculate reward based on gene expression pattern simulation.
     
     Args:
-        state: 1D array containing weights (w), diagonal factors (d), and decay rates (s)
+        state: 1D array containing weights (w), diagonal factors (d), and decay rates (s) - N/A
               For n nodes: n^2 weights + n d values + n s values = n^2 + 2n total parameters
         plot: bool, whether to plot the heatmap (default: False)
         ax: matplotlib axes object for plotting in a grid (default: None)
