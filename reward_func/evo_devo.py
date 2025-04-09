@@ -218,7 +218,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     D = np.diag(d_values) / DIAGONAL_SCALE  # Scale diagonal values
     D_ONES = D @ np.ones(n_nodes)
     # A, B = 0.1, 0.2
-    A, B = 0.1/2.5, 0.2/2.5 
+    # A, B = 0.1/2.5, 0.2/2.5 
+    A, B = 0.1/5, 0.2/5
     S = s_values  # Decay rates
     
     # Pre-compute positions array
