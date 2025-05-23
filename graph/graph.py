@@ -30,10 +30,12 @@ from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func, weights_to_matrix
 
 
+
 def calculate_n_nodes_from_state(state):
     # solve quadratic: n^2 + n - len(state) = 0
-    return int((-1 + (1 + 4*len(state))**0.5) / 2)
-
+    n = int((-1 + (1 + 4*len(state))**0.5) / 2)
+    # print(f"State length: {len(state)}, Calculated n_nodes: {n}")
+    return n
 
 def extract_network_parameters(state):
     """
@@ -47,10 +49,11 @@ def extract_network_parameters(state):
     """
     n_nodes = calculate_n_nodes_from_state(state)
     n_weights = n_nodes * n_nodes
+    
     weights = state[:n_weights]
     d_values = state[n_weights:n_weights+n_nodes]
+    s_values = np.ones(n_nodes)  # optional (not in use)
     # s_values = state[n_weights+n_nodes:]
-    s_values = [1.2, 0.8, 0.9]  # s values
     
     return weights, d_values, s_values, n_nodes, n_weights
 
@@ -64,16 +67,27 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
         ax = plt.gca()
         
     # Extract network parameters
-    weights, d_values, s_values, n_nodes, n_weights = extract_network_parameters(state)
+    weights, d_values, _, n_nodes, _ = extract_network_parameters(state)
     
     weight_matrix = weights_to_matrix(weights)
     G = nx.DiGraph()
-    node_colors = plt.cm.rainbow(np.linspace(0, 1, n_nodes)) # Generate evenly spaced colors for nodes
-    G.add_nodes_from(range(1, n_nodes + 1))
+    
+    # Create two sets of nodes: weight nodes and d_value nodes
+    weight_nodes = range(1, n_nodes + 1)
+    d_value_nodes = [f'd{i}' for i in range(1, n_nodes + 1)]
+    
+    # Add all nodes to the graph
+    G.add_nodes_from(weight_nodes)
+    G.add_nodes_from(d_value_nodes)
+    
     
     # Process edges and their properties
     edge_colors_dict = {}
     edge_widths_dict = {}
+    edge_styles_dict = {}
+    edge_alphas_dict = {}
+    
+    # Add edges on weight nodes
     for i in range(n_nodes):
         for j in range(n_nodes):
             if weight_matrix[i, j] != 0:
@@ -81,20 +95,84 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
                 edge = (j + 1, i + 1)  # Changed direction to match the requirement
                 G.add_edge(*edge, weight=weight_matrix[i, j])
                 edge_colors_dict[edge] = 'blue' if weight_matrix[i, j] < 0 else 'red'
-                # Clip weight to max_edge_weight and scale to width between 0.5 and 5
+                edge_styles_dict[edge] = 'solid'
+                edge_alphas_dict[edge] = 1.0
                 weight = min(abs(weight_matrix[i, j]), max_edge_weight)
                 edge_widths_dict[edge] = 0.5 + (weight * 9.5 / max_edge_weight)
     
+    # Add edges between d_value nodes and their corresponding weight nodes
+    for i in range(n_nodes):
+        d_node = f'd{i+1}'
+        w_node = i + 1
+        d_value = d_values[i]
+        if d_value != 0:  # Only add edge if d_value is non-zero
+            G.add_edge(d_node, w_node, weight=d_value)
+            edge_colors_dict[(d_node, w_node)] = 'blue' if d_value < 0 else 'red'
+            edge_styles_dict[(d_node, w_node)] = 'dashed'
+            edge_alphas_dict[(d_node, w_node)] = 0.4
+            d_weight = min(abs(d_value), max_edge_weight)
+            edge_widths_dict[(d_node, w_node)] = 0.5 + (d_weight * 9.5 / max_edge_weight)
+    
     edge_colors = [edge_colors_dict[edge] for edge in G.edges]
     edge_widths = [edge_widths_dict[edge] for edge in G.edges]
+    edge_styles = [edge_styles_dict[edge] for edge in G.edges]
+    edge_alphas = [edge_alphas_dict[edge] for edge in G.edges]
     
-    # Draw the graph
-    pos = nx.circular_layout(G)
-    nx.draw(G, pos, ax=ax, with_labels=True, node_size=node_size,
-            node_color=node_colors, font_size=15, font_weight='bold',
-            arrows=True, arrowsize=15, edge_color=edge_colors,
-            width=edge_widths, connectionstyle="arc3,rad=0.2")
-            
+    # Use different layouts based on number of nodes
+    pos = {}
+    if n_nodes == 2:
+        # Use spring layout for 2-node networks
+        inner_pos = nx.spring_layout({i: None for i in weight_nodes}, k=1, seed=42)
+        outer_pos = nx.spring_layout({f'd{i}': None for i in range(1, n_nodes + 1)}, k=1, seed=42)
+    else:
+        # Use circular layout for larger networks
+        inner_pos = nx.circular_layout({i: None for i in weight_nodes})
+        outer_pos = nx.circular_layout({f'd{i}': None for i in range(1, n_nodes + 1)})
+    
+    # Scale the positions
+    for node, (x, y) in inner_pos.items():
+        pos[node] = (x * 0.5, y * 0.5)
+    
+    for node, (x, y) in outer_pos.items():
+        pos[node] = (x * 0.8, y * 0.8)
+    
+    
+    
+    # Draw nodes with different colors and fixed sizes
+    node_colors = plt.cm.rainbow(np.linspace(0, 1, n_nodes))  # Generate colors for weight nodes
+    nx.draw_networkx_nodes(G, pos, 
+                          nodelist=weight_nodes,
+                          node_color=node_colors,
+                          node_size=node_size,
+                          ax=ax)
+    nx.draw_networkx_nodes(G, pos,
+                          nodelist=d_value_nodes,
+                          node_color='lightgray',
+                          node_size=node_size * 0.5,
+                          ax=ax)
+    
+    # Draw edges with styles and transparency
+    nx.draw_networkx_edges(G, pos,
+                          edge_color=edge_colors,
+                          width=edge_widths,
+                          style=edge_styles,
+                          alpha=edge_alphas,
+                          arrows=True,
+                          arrowsize=18,
+                          connectionstyle="arc3,rad=0.2",
+                          ax=ax)
+    
+    # Draw labels
+    nx.draw_networkx_labels(G, pos,
+                           {i: str(i) for i in weight_nodes},
+                           font_size=15,
+                           font_weight='bold',
+                           ax=ax)
+    nx.draw_networkx_labels(G, pos,
+                           {f'd{i}': f'd{i}' for i in range(1, n_nodes + 1)},
+                           font_size=12,
+                           ax=ax)
+    
     return G
 
 
@@ -107,15 +185,13 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
         save_path (str, optional): Path to save the figure. If None, timestamp will be used
     """
     # Grid layout parameters
-    node_size = 200
-    max_cols = 6  # Reduced to fit both motif and somite plots side by side
+    node_size = 550
+    max_cols = 6
     n_plots = len(test_states_list)
     n_cols = min(max_cols, n_plots)
-    n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)  # Double rows to fit somite plots
-       
-    # Create figure with dynamic grid size
-    fig_width = 8  # Width per subplot
-    fig_height = 6  # Height per subplot
+    n_rows = 2 * ((n_plots + max_cols - 1) // max_cols)
+    fig_width = 8
+    fig_height = 6
     fig, axs = plt.subplots(n_rows, n_cols, figsize=(fig_width * n_cols, fig_height * n_rows))
     fig.suptitle("Network Motifs and Somite Patterns", fontsize=16)
 
@@ -128,22 +204,26 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
     # Plot each test case with its corresponding somite pattern
     for idx, state in enumerate(test_states_list):
         col = idx % max_cols
-        row = 2 * (idx // max_cols)  # Multiply by 2 to leave space for somite plots
+        row = 2 * (idx // max_cols)
         
         # Draw the network motif
         G = draw_network_motif(state, ax=axs[row, col], node_size=node_size)
         
-        # Create title showing weights in matrix form
-        weights, _, _, n_nodes, _ = extract_network_parameters(state)
+        # Create title showing the state values
+        weights, d_values, _, n_nodes, _ = extract_network_parameters(state)
         weight_matrix = weights_to_matrix(weights)
-        title = f"\n\nMotif {idx+1}\n"
-        # Print weight matrix with fixed width formatting
+        title = f"Motif {idx+1}\n"
+        
+        # Add weights in matrix form
         for i in range(n_nodes):
             row_str = "  ".join([f"{weight_matrix[i,j]:<6d}" for j in range(n_nodes)])
             title += f"{row_str}\n"
         
+        # Add d_values
+        d_str = ", ".join([f"{d:<6d}" for d in d_values])
+        title += f"d_values: [{d_str}]"
+        
         axs[row, col].set_title(title, fontsize=8)
-        axs[row, col].set_aspect('equal')
         
         # Draw the somite pattern below the motif
         reward = somitogenesis_reward_func(state, plot=True, ax=axs[row+1, col])
@@ -159,7 +239,7 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
     plt.tight_layout()
     
     if save_path is None:
-        save_path = f"graph/network_motifs_and_somites_grid_{int(time.time())}.png"
+        save_path = f"network_motifs_and_somites_grid_{int(time.time())}.png"
     plt.savefig(save_path)
     plt.close()
     
@@ -171,18 +251,34 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
 
 
 if __name__ == "__main__":
-    # Example usage with full state vectors (weights + d_values + s_values)
+    # Example usage with state vectors (weights + d_values)
+    # Each state vector contains:
+    # - weights: n_nodes * n_nodes values
+    # - d_values: n_nodes values
     test_states_list = [
-        # [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1],  # 3x3 weights + 3 d_values + 3 s_values
-        # [153, -159, -32, 19, -14, -45, -101, -32, 42, 1, 1, 1, 1, 1, 1],
-        # [15, -94, -27, -4, 100, -90, -85, -13, 30, 1, 1, 1, 1, 1, 1],
-        # [150, -162, 145, 19, -20, 10, -104, -29, 65, 1, 1, 1, 1, 1, 1],
-        # [1, -166, 119, -87, 58, -85, -111, -60, 78, 1, 1, 1, 1, 1, 1],
-        # [155, -200, 73, -49, 100, -103, -127, -19, 27, 1, 1, 1, 1, 1, 1],
-        # [126, -125, -56, 107, 105, -126, 100, -11, 175, 1, 1, 1, 1, 1, 1, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
-        [80, 66, -86, -32, 37, -7, -1, -50, 11, 55, -11, -7, -50, -2, -11, 6, 0, -5, -5, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -65, 51, -12, -25, 0, 0, 0]
+        # Example 1: 3x3 network
+        [80, 66, -86,    # weights for node 1
+         -32, 37, -7,    # weights for node 2
+         -1, -50, 11,    # weights for node 3
+         55, -11, -7],   # d_values for nodes 1,2,3
+        
+        # # Example 2: 4x4 network
+        # [100, -50, 30, -20,    # weights for node 1
+        #  -60, 80, -40, 25,     # weights for node 2
+        #  35, -45, 90, -55,     # weights for node 3
+        #  -25, 65, -35, 70,     # weights for node 4
+        #  40, -30, 50, -20],    # d_values for nodes 1,2,3,4
+        
+        # Example 3: 2x2 network
+        # [120, -80,        # weights for node 1
+        #  -90, 110,        # weights for node 2
+        #  25, -15]         # d_values for nodes 1,2
+        
+        [100, 1, -42, 96, -27, 62],
+        [100, 1, -42, 96, 0, -100]
     ]
     
+    # Plot the network motifs
     plot_network_motifs_and_somites(test_states_list)
 
 
