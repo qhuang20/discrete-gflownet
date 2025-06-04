@@ -88,11 +88,6 @@ def weights_to_matrix(weights, plot=False, ax=None):
 
 
 
-
-
-
-
-
 def oscillator_reward_func(weights, plot=False):
     """
     Simulate n-node system with given weights and return reward.
@@ -110,7 +105,7 @@ def oscillator_reward_func(weights, plot=False):
     assert n_nodes * n_nodes == len(weights), "Weights length must be a perfect square"
     
     # System parameters for n-node system
-    n_simtime = 60  
+    max_simtime = 60  
     n_timepoints = 600 
     delta_osc = 0.00002  # 0.0002
     rtol = 1e-4  # Relative tolerance for ODE solver
@@ -147,7 +142,7 @@ def oscillator_reward_func(weights, plot=False):
         return peaks
 
     # Simulate system
-    t = np.linspace(0, n_simtime, n_timepoints)
+    t = np.linspace(0, max_simtime, n_timepoints)
     W = np.array(weights).reshape(n_nodes, n_nodes)
     
     sol = solve_ivp(n_node_system_with_sigmoid, (t[0], t[-1]), x0, t_eval=t,
@@ -172,6 +167,78 @@ def oscillator_reward_func(weights, plot=False):
 
 
 
+
+
+
+
+
+def _parse_somitogenesis_state(state):
+    """Parse state vector into weights and diagonal values."""
+    n_nodes = int((-1 + (1 + 4*len(state))**0.5) / 2)
+    n_weights = n_nodes * n_nodes
+    weights = state[:n_weights]
+    d_values = state[n_weights:n_weights+n_nodes]
+    s_values = np.ones(n_nodes)
+    return n_nodes, weights, d_values, s_values
+
+
+def _simulate_somitogenesis_system(weights, d_values, s_values, n_nodes):
+    """
+    Simulate the somitogenesis system and return time points and solution.
+    
+    Returns:
+        tuple: (t_sim, solution) where solution has shape [time, cells, genes]
+    """
+    # System parameters
+    N_CELLS = 100
+    MAX_SIMTIME = 90
+    N_TIMEPOINTS = 200
+    RTOL = 1e-3
+    ATOL = 1e-6
+    WEIGHT_SCALE = 10 
+    DIAGONAL_SCALE = 10 
+    
+    # Pre-compute initial conditions and parameters
+    x0 = np.full(N_CELLS * n_nodes, 0.1)
+    D = np.diag(d_values) / DIAGONAL_SCALE
+    D_ONES = D @ np.ones(n_nodes)
+    A, B = 0.1/5, 0.2/5
+    S = s_values
+    positions = np.arange(N_CELLS).reshape(-1, 1)
+
+    def n_node_system(t, x, W):
+        """System dynamics with node-specific parameters"""
+        x_reshaped = x.reshape(-1, n_nodes)
+        g = np.minimum(np.exp(A * positions - B * t), 1)
+        z = g * D_ONES + x_reshaped @ W.T
+        sigmoid_z = sigmoid(z)
+        decay = x_reshaped * S
+        return (sigmoid_z - decay).flatten()
+    
+    # Simulate system
+    W = weights_to_matrix(weights) / WEIGHT_SCALE
+    t_sim = np.linspace(0, MAX_SIMTIME, N_TIMEPOINTS)
+    
+    sol = solve_ivp(
+        lambda t, x: n_node_system(t, x, W),
+        (t_sim[0], t_sim[-1]),
+        x0,
+        t_eval=t_sim,
+        method='RK45',
+        rtol=RTOL,
+        atol=ATOL
+    )
+    
+    # Reshape solution: [time, cells, genes]
+    solution = sol.y.T.reshape(len(t_sim), N_CELLS, n_nodes)
+    return t_sim, solution
+
+
+
+
+
+
+
 def somitogenesis_reward_func(state, plot=False, ax=None):
     """
     Calculate reward based on gene expression pattern simulation.
@@ -186,83 +253,31 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         float: Reward value based on pattern formation and stability
     """
     
-    # n_nodes = int((-2 + (4 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + 2n - len(state) = 0 
-    n_nodes = int((-1 + (1 + 4*len(state))**0.5) / 2)  # solve quadratic: n^2 + n - len(state) = 0 
-    n_weights = n_nodes * n_nodes
-    weights = state[:n_weights]
-    d_values = state[n_weights:n_weights+n_nodes]
-    s_values = np.ones(n_nodes) # Generate s_values with all 1s 
+    # Parse state and simulate system
+    n_nodes, weights, d_values, s_values = _parse_somitogenesis_state(state)
+    t_sim, sol = _simulate_somitogenesis_system(weights, d_values, s_values, n_nodes)
     
-    # System parameters - moved to constants for faster access
+    # Extract x1 concentration for analysis
+    x1_concentration = sol[:, :, 0]
+    
+    # Reward calculation parameters
     N_CELLS = 100
-    N_SIMTIME = 90
-    N_TIMEPOINTS = 200
+    MAX_SIMTIME = 90
     DELTA_SOMITE = 0.1
     DELTA_STABILITY = 0.02
     STABILITY_WEIGHT = 1.0
-    SPARSITY_WEIGHT = 0.8   # 0 - 0.8 (max) 
-    STABILITY_POWER = 5  # smaller tolerates waves more 
+    SPARSITY_WEIGHT = 0.8
+    STABILITY_POWER = 5
     N_BOUNDARY_CHECKS = 3
-    RTOL = 1e-3
-    ATOL = 1e-6
-    # WEIGHT_SCALE = 10 
-    # WEIGHT_SCALE = 5 
-    WEIGHT_SCALE = 10 
-    DIAGONAL_SCALE = 10 
-    
-    
-    # Pre-compute initial conditions
-    x0 = np.full(N_CELLS * n_nodes, 0.1)  # Faster than tile
-    
-    # Fixed parameters
-    D = np.diag(d_values) / DIAGONAL_SCALE  # Scale diagonal values
-    D_ONES = D @ np.ones(n_nodes)
-    # A, B = 0.1, 0.2
-    # A, B = 0.1/2.5, 0.2/2.5 
-    A, B = 0.1/5, 0.2/5
-    S = s_values  # Decay rates
-    
-    # Pre-compute positions array
-    positions = np.arange(N_CELLS).reshape(-1, 1)
-
-
-
-    def n_node_system(t, x, W):
-        """System dynamics with node-specific parameters"""
-        x_reshaped = x.reshape(-1, n_nodes)
-        g = np.minimum(np.exp(A * positions - B * t), 1)
-        z = g * D_ONES + x_reshaped @ W.T
-        sigmoid_z = sigmoid(z)  # Use the protected sigmoid function instead
-        # sigmoid_z = 1 / (1 + np.exp(-z)) 
-        decay = x_reshaped * S  # S already has shape (n_nodes,) which broadcasts correctly with (N_CELLS, n_nodes)
-        # print(W)  # Print the weight matrix
-        return (sigmoid_z - decay).flatten()
-
-    def simulate_system(weights):
-        """Simulate with optimized matrix operations"""
-        W = weights_to_matrix(weights) / WEIGHT_SCALE     
-        t = np.linspace(0, N_SIMTIME, N_TIMEPOINTS)
-        
-        sol = solve_ivp(
-            lambda t, x: n_node_system(t, x, W),
-            (t[0], t[-1]),
-            x0,
-            t_eval=t,
-            method='RK45',
-            rtol=RTOL,
-            atol=ATOL
-        )
-        return t, sol.y.T.reshape(len(t), N_CELLS, n_nodes)
 
     def count_boundaries(concentrations):
         """Count boundaries with minimum distance between them"""
         n_boundaries = 0
-        last_boundary_pos = -float('inf')  # Position of last detected boundary
+        last_boundary_pos = -float('inf')
         
         for i in range(len(concentrations)-1):
             diff = abs(concentrations[i+1] - concentrations[i])
             if diff > DELTA_SOMITE:
-                # Only count if far enough from last boundary (minimum 4 cells apart)
                 if i - last_boundary_pos >= 4: 
                     n_boundaries += 1
                     last_boundary_pos = i
@@ -270,17 +285,15 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
 
     def sparsity_reward_combined(state, w1=0.0, w2=1.0):
         # Entropy-based component
-        # Normalize values to probabilities
         abs_values = np.abs(state)
         if sum(abs_values) == 0:
-            entropy_reward = 1.0  # maximum sparsity
+            entropy_reward = 1.0
         else:
             probs = abs_values / sum(abs_values)
-            # Calculate entropy (lower entropy = more sparse)
             entropy = -sum(p * np.log(p) for p in probs if p > 0)
-            entropy_reward = 1 / (1 + entropy)  # transform to reward
+            entropy_reward = 1 / (1 + entropy)
         
-        # L0 component (explicitly rewards zeros)
+        # L0 component
         n_zeros = sum(1 for x in state if x == 0)
         l0_reward = n_zeros / len(state)
         
@@ -294,12 +307,11 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         total_boundaries = sum(count_boundaries(x1_concentration[idx]) for idx in check_indices)
         if plot: print(f"Total boundaries across {N_BOUNDARY_CHECKS} timepoints: {total_boundaries}")
         
-        # Calculate sparsity reward - always available
         sparsity_factor = round(1.0 + (SPARSITY_WEIGHT * sparsity_reward_combined(weights)), 3)
         if plot: print(f"Sparsity factor: {sparsity_factor}")
         
-        if total_boundaries <= 2:  # to prevent slope 
-            return sparsity_factor - 1.0  # Return just the sparsity component when boundaries are insufficient
+        if total_boundaries <= 2:
+            return sparsity_factor - 1.0
             
         # Vectorized stability calculation
         second_half = x1_concentration[mid_idx:]
@@ -310,17 +322,16 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         stability_reward = round((1 - total_changes / max_possible_changes) ** STABILITY_POWER, 3)
         if plot: print(f"Stability reward: {stability_reward}")
         
-        # Multiplicative sparsity reward
         return round(total_boundaries * stability_reward * sparsity_factor, 3) 
 
     def plot_heatmap(x1_concentration, t, ax=None):
-        """Plot heatmap (unchanged since plotting is not performance critical)"""
+        """Plot heatmap"""
         if ax is None:
             plt.figure(figsize=(10, 6))
             ax = plt.gca()
             
         im = ax.imshow(x1_concentration.T, aspect='auto', cmap='Blues',
-                      extent=[0, N_SIMTIME, 100, 0])
+                      extent=[0, MAX_SIMTIME, 100, 0])
         plt.colorbar(im, ax=ax, label='x1 Concentration')
         ax.set_xlabel('Time')
         ax.set_ylabel('Position')
@@ -328,20 +339,58 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         
         if ax is None:
             plt.show()
-    # Main execution
-    t, sol = simulate_system(weights)
-    x1_concentration = sol[:, :, 0]
-    # x1_concentration = sol[:, :, 2] 
-    
-    # Print the last 5 values of the first cell for x1, x2, x3
+
+    # Plot if requested
     if plot:
-        # print("Last 5 values of first cell:")
-        # print(f"x1: {sol[-5:, 0, 0]}")
-        # print(f"x2: {sol[-5:, 0, 1]}")
-        # print(f"x3: {sol[-5:, 0, 2]}")
-        plot_heatmap(x1_concentration, t, ax)
+        plot_heatmap(x1_concentration, t_sim, ax)
     
     return calculate_reward(x1_concentration)
+
+
+
+
+
+
+
+def somitogenesis_sol_func(state, cell_position=99, max_simtime=90, plot=False):
+    """
+    Simulate gene expression dynamics and return solution for specific cell position.
+    
+    Args:
+        state: 1D array containing weights (w) and diagonal factors (d)
+        cell_position: Which cell position to analyze (0 to N_CELLS-1, default: 99)
+        max_simtime: Maximum simulation time (default: 90)
+        plot: bool, whether to plot oscillation diagram for all nodes (default: False)
+        
+    Returns:
+        tuple: (t_sim, cell_trajectory, full_solution)
+            - t_sim: Time points array
+            - cell_trajectory: Gene expression for specified cell [time, genes]
+            - full_solution: Full solution [time, cells, genes]
+    """
+    # Parse state and simulate system
+    n_nodes, weights, d_values, s_values = _parse_somitogenesis_state(state)
+    t_sim, full_solution = _simulate_somitogenesis_system(weights, d_values, s_values, n_nodes)
+    
+    # Extract trajectory for specific cell
+    cell_trajectory = full_solution[:, cell_position, :]
+    
+    # Plot oscillation diagram if requested
+    if plot:
+        plt.figure(figsize=(12, 8))
+        
+        # Plot all genes for the specified cell
+        for i in range(n_nodes):
+            plt.plot(t_sim, cell_trajectory[:, i], label=f'Gene {i+1}', linewidth=2)
+        
+        plt.xlabel('Time')
+        plt.ylabel('Gene Concentration')
+        plt.title(f'Gene Expression Dynamics - Cell {cell_position}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.show()
+    
+    return t_sim, cell_trajectory, full_solution
 
 
 
