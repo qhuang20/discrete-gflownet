@@ -23,23 +23,20 @@ from disc_gflownet.envs.grid_env2 import GridEnv2
 from disc_gflownet.envs.set_env import SetEnv
 
 from scipy.integrate import solve_ivp
-from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 
 from threadpoolctl import threadpool_info, ThreadpoolController
 from pprint import pprint
+
+# Import config functionality
+from configs import get_config, CONFIGS
+from configs.reward_configs import get_reward_function
+
 controller = ThreadpoolController()
 controller.limit(limits=1, user_api='blas')
-# pprint(threadpool_info())
-# exit()
-
-
-
-
 
 def compute_reward(curr_ns, env, reward_func):
     curr_ns_state = env.encoding_to_state(curr_ns)
     return reward_func(curr_ns_state) + env.min_reward
-
 
 def save_checkpoint(run_dir, agent, opt, losses, zs, current_step, ep_last_state_counts, ep_last_state_trajectories, interrupted=False):
     """Save training checkpoint to file"""
@@ -61,23 +58,39 @@ def save_checkpoint(run_dir, agent, opt, losses, zs, current_step, ep_last_state
         print(f"\nTraining interrupted by user.")
         print(f"Checkpoint saved to {checkpoint_path}")
 
+def config_to_args(config_class, reward_func_name='somitogenesis'):
+    """Convert a config class to an argparse-like object."""
+    class Args:
+        def __init__(self, config_class, reward_func_name):
+            # Copy all attributes from config class
+            for attr in dir(config_class):
+                if not attr.startswith('_'):
+                    setattr(self, attr, getattr(config_class, attr))
+            
+            # Set the reward function
+            self.custom_reward_fn = get_reward_function(reward_func_name)
+    
+    return Args(config_class, reward_func_name)
 
-
-
-
-
-
-def main(args):
+def main(config_name, reward_func_name='somitogenesis'):
     global losses, zs, agent
     global ep_last_state_counts, ep_last_state_trajectories 
+
+    # Get config and create args object
+    config_class = get_config(config_name)
+    args = config_to_args(config_class, reward_func_name)
 
     assert args.envsize == args.mbsize
     set_seed(args.seed)
     set_device(torch.device(args.device))
     
-    # Environment setup 
-    envs = [GridEnv(args) for _ in range(args.envsize)]
-    # envs = [GridEnv2(args) for _ in range(args.envsize)]
+    # Environment setup based on config
+    if args.env_type == 'GridEnv':
+        envs = [GridEnv(args) for _ in range(args.envsize)]
+    elif args.env_type == 'GridEnv2':
+        envs = [GridEnv2(args) for _ in range(args.envsize)]
+    else:
+        raise ValueError(f"Unknown environment type: {args.env_type}")
     
     # Agent setup
     if args.method == 'tb':
@@ -89,7 +102,7 @@ def main(args):
 
     # Logging setup
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{args.method}_h{args.n_hid}_l{args.n_layers}_mr{args.min_reward}_ts{args.n_train_steps}_d{args.n_dims}_s{args.n_steps}_er{args.explore_ratio}_et{args.enable_time}" 
+    run_name = f"{config_name}_{args.method}_h{args.n_hid}_l{args.n_layers}_mr{args.min_reward}_ts{args.n_train_steps}_d{args.n_dims}_s{args.n_steps}_er{args.explore_ratio}_et{args.enable_time}_{reward_func_name}" 
     run_dir = os.path.join('runs', f'{timestamp}_{run_name}') 
     os.makedirs(run_dir, exist_ok=True)
     if args.log_flag:
@@ -107,7 +120,6 @@ def main(args):
             experiences = agent.sample_batch_episodes(args.mbsize)
 
             if args.n_workers > 1: 
-                # print("Start Multiprocessing !") 
                 curr_ns_all = np.zeros((args.mbsize, args.n_steps, envs[0].encoding_dim))
                 for mb in range(args.mbsize): 
                     curr_ns_all[mb] = experiences[0][mb].cpu()[1:] 
@@ -122,10 +134,7 @@ def main(args):
 
                 for mb in range(args.mbsize):
                     experiences[3][mb] = torch.from_numpy(curr_r_env[mb]) 
-                # print("Multiprocessing done !") 
-            
                                 
-                
             if args.method == 'fldb':
                 loss, z = agent.compute_batch_loss(experiences, use_fldb=True) 
             else:
@@ -156,92 +165,25 @@ def main(args):
 
     return losses, zs, agent, ep_last_state_counts, ep_last_state_trajectories 
 
-
-
-
-
 if __name__ == '__main__':
     print(f"Available OS CPU threads: {os.cpu_count()}")
     print(f"Default PyTorch CPU threads: {torch.get_num_threads()}")
-    # torch.set_num_threads(1) 
     
-    argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.')
+    argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.') 
     
-    # Training
-    argparser.add_argument('--device', type=str, default='cpu') # cuda
-    argparser.add_argument('--progress', type=bool, default=True)
-    argparser.add_argument('--seed', type=int, default=42) 
-    # argparser.add_argument('--n_train_steps', type=int, default=1000) 
-    argparser.add_argument('--n_train_steps', type=int, default=1000) 
-    argparser.add_argument('--n_workers', type=int, default=8) 
-    argparser.add_argument('--cache_max_size', type=int, default=10_000) # cache will be used when n_workers == 1 
-    argparser.add_argument('--log_freq', type=int, default=100) 
-    # argparser.add_argument('--log_freq', type=int, default=1000) 
-    argparser.add_argument('--log_flag', type=bool, default=True)
-    argparser.add_argument('--mbsize', type=int, default=8) 
-    
-    # Model 
-    # argparser.add_argument('--method', type=str, default='tb') 
-    argparser.add_argument('--method', type=str, default='fldb') 
-    # argparser.add_argument('--explore_ratio', type=float, default=0.06) 
-    argparser.add_argument('--explore_ratio', type=float, default=0.05) 
-    argparser.add_argument('--learning_rate', type=float, default=1e-3)
-    argparser.add_argument('--tb_lr', type=float, default=0.01)
-    argparser.add_argument('--tb_z_lr', type=float, default=0.1)
-    argparser.add_argument('--n_hid', type=int, default=256)
-    argparser.add_argument('--n_layers', type=int, default=3)  # 300
-    argparser.add_argument('--temp', type=float, default=1.0)
-    argparser.add_argument('--uni_rand_pb', type=float, default=1.0) 
-    
-    
-    
-    
-    # Environment 
-    argparser.add_argument('--envsize', type=int, default=8)
-    argparser.add_argument('--min_reward', type=float, default=1e-3)  # 1e-6
-    argparser.add_argument('--enable_time', type=bool, default=False)
-    argparser.add_argument('--consistent_signs', type=bool, default=True) 
-    argparser.add_argument('--custom_reward_fn', type=callable, default=somitogenesis_reward_func) 
-    argparser.add_argument('--grid_bound', type=dict, default={
-        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
-        'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
-    })
-    argparser.add_argument('--actions_per_dim', type=dict, default={
-        # 'weight': [1, 5, 25, -1, -5, -25],   # For the 9 weight parameters
-        # 'diagonal': [1, 5, 25, -1, -5, -25],         # For the 3 diagonal factors
-        # 'weight': [1, 5, -1, -5],   # For the 9 weight parameters
-        # 'diagonal': [1, 5, -1, -5],         # For the 3 diagonal factors
-        'weight': [5, 25, -5, -25],   # For the 9 weight parameters
-        'diagonal': [5, 25, -5, -25],         # For the 3 diagonal factors
-    })
-    
-    
-
-    """GridEnv"""  # all at once
-    argparser.add_argument('--n_dims', type=int, default=7**2+7)  # no need for --n_nodes, since it can be inferred from n_dims by solve quadratic equ
-    argparser.add_argument('--max_nodes', type=int, default=3)  # Maximum number of nodes this subnetwork can have
-    argparser.add_argument('--max_edges', type=int, default=6)  # Maximum number of di-edges (on w) this subnetwork can have, < self.max_nodes * self.max_nodes
-    argparser.add_argument('--n_steps', type=int, default=(3+6)*4-1)  # < (max_nodes + max_edges) * (grid_bound / max(actions_per_dim))
-    
-    
-    
-    """GridEnv2"""  # divide and conquer
-    # argparser.add_argument('--n_steps', type=int, default=2+6+10) 
-    # argparser.add_argument('--n_dims', type=int, default=3**2+3)
-    # argparser.add_argument('--steps_per_network', type=dict, default={1:2, 2:6, 3:10})
-    
-    # argparser.add_argument('--n_steps', type=int, default=8+24+40) 
-    # argparser.add_argument('--n_dims', type=int, default=3**2+3)
-    # argparser.add_argument('--steps_per_network', type=dict, default={1: 8, 2: 24, 3: 40})
-    
-    # argparser.add_argument('--n_steps', type=int, default=(1+3+5+7+9+11+13)*4) 
-    # argparser.add_argument('--n_dims', type=int, default=7**2+7)
-    # argparser.add_argument('--steps_per_network', type=dict, default={1:1*4, 2:3*4, 3:5*4, 4:7*4, 5:9*4, 6:11*4, 7:13*4}) 
-
-
+    # Config selection
+    argparser.add_argument('--config', type=str, default='gridenv', 
+                          help=f'Configuration to use. Available: {list(CONFIGS.keys())}')
+    argparser.add_argument('--reward', type=str, default='somitogenesis',
+                          help='Reward function to use. Available: coord, oscillator, somitogenesis')
     
     args = argparser.parse_args()
-    main(args)
-
-
-
+    
+    # Print configuration info
+    print(f"Using config: {args.config}")
+    print(f"Using reward function: {args.reward}")
+    print("To modify parameters, edit the config files directly in configs/")
+    
+    main(args.config, args.reward) 
+    
+    
