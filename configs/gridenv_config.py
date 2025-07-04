@@ -2,9 +2,9 @@
 Configuration for GridEnv (all at once approach).
 """
 
-from .base_config import BaseConfig
+from .baseenv_config import BaseEnvConfig
 
-class GridEnvConfig(BaseConfig):
+class GridEnvConfig(BaseEnvConfig):
     
     env_type = 'GridEnv' 
     n_train_steps = 500

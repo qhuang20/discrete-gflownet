@@ -3,7 +3,7 @@ Base configuration for GFlowNet training.
 Contains default parameters that are shared across different environments.
 """
 
-class BaseConfig:
+class BaseEnvConfig:
     # Training
     device = 'cpu'  # cuda
     progress = True

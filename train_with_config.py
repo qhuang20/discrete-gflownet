@@ -27,8 +27,8 @@ from scipy.integrate import solve_ivp
 from threadpoolctl import threadpool_info, ThreadpoolController
 from pprint import pprint
 
-# Import config functionality
-from configs import get_config, CONFIGS
+# Import environment configuration functionality
+from configs import get_env, ENVS
 from configs.reward_configs import get_reward_function
 
 controller = ThreadpoolController()
@@ -58,27 +58,27 @@ def save_checkpoint(run_dir, agent, opt, losses, zs, current_step, ep_last_state
         print(f"\nTraining interrupted by user.")
         print(f"Checkpoint saved to {checkpoint_path}")
 
-def config_to_args(config_class, reward_func_name='somitogenesis'):
-    """Convert a config class to an argparse-like object."""
+def env_to_args(env_class, reward_func_name='somitogenesis'):
+    """Convert an environment configuration class to an argparse-like object."""
     class Args:
-        def __init__(self, config_class, reward_func_name):
-            # Copy all attributes from config class
-            for attr in dir(config_class):
+        def __init__(self, env_class, reward_func_name):
+            # Copy all attributes from env class
+            for attr in dir(env_class):
                 if not attr.startswith('_'):
-                    setattr(self, attr, getattr(config_class, attr))
+                    setattr(self, attr, getattr(env_class, attr))
             
             # Set the reward function
             self.custom_reward_fn = get_reward_function(reward_func_name)
     
-    return Args(config_class, reward_func_name)
+    return Args(env_class, reward_func_name)
 
-def main(config_name, reward_func_name='somitogenesis'):
+def main(env_name, reward_func_name='somitogenesis'):
     global losses, zs, agent
     global ep_last_state_counts, ep_last_state_trajectories 
 
-    # Get config and create args object
-    config_class = get_config(config_name)
-    args = config_to_args(config_class, reward_func_name)
+    # Get environment configuration and create args object
+    env_class = get_env(env_name)
+    args = env_to_args(env_class, reward_func_name)
 
     assert args.envsize == args.mbsize
     set_seed(args.seed)
@@ -102,7 +102,7 @@ def main(config_name, reward_func_name='somitogenesis'):
 
     # Logging setup
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{config_name}_{args.method}_h{args.n_hid}_l{args.n_layers}_mr{args.min_reward}_ts{args.n_train_steps}_d{args.n_dims}_s{args.n_steps}_er{args.explore_ratio}_et{args.enable_time}_{reward_func_name}" 
+    run_name = f"{env_name}_{args.method}_h{args.n_hid}_l{args.n_layers}_mr{args.min_reward}_ts{args.n_train_steps}_d{args.n_dims}_s{args.n_steps}_er{args.explore_ratio}_et{args.enable_time}_{reward_func_name}" 
     run_dir = os.path.join('runs', f'{timestamp}_{run_name}') 
     os.makedirs(run_dir, exist_ok=True)
     if args.log_flag:
@@ -171,19 +171,18 @@ if __name__ == '__main__':
     
     argparser = ArgumentParser(description='GFlowNet for Genetic Circuits Design.') 
     
-    # Config selection
-    argparser.add_argument('--config', type=str, default='gridenv', 
-                          help=f'Configuration to use. Available: {list(CONFIGS.keys())}')
+    # Environment selection
+    argparser.add_argument('--env', type=str, default='gridenv', 
+                          help=f'Environment to use. Available: {list(ENVS.keys())}')
     argparser.add_argument('--reward', type=str, default='somitogenesis',
                           help='Reward function to use. Available: coord, oscillator, somitogenesis')
     
     args = argparser.parse_args()
     
-    # Print configuration info
-    print(f"Using config: {args.config}")
+    # Print environment configuration info
+    print(f"Using environment: {args.env}")
     print(f"Using reward function: {args.reward}")
-    print("To modify parameters, edit the config files directly in configs/")
+    print("To modify parameters, edit the environment config files directly in configs/")
     
-    main(args.config, args.reward) 
-    
-    
+    main(args.env, args.reward) 
+

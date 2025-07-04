@@ -178,7 +178,7 @@ def _parse_somitogenesis_state(state):
     n_weights = n_nodes * n_nodes
     weights = state[:n_weights]
     d_values = state[n_weights:n_weights+n_nodes]
-    s_values = np.ones(n_nodes)
+    s_values = np.ones(n_nodes)  # we set them to 1
     return n_nodes, weights, d_values, s_values
 
 
