@@ -18,6 +18,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
 from scipy.spatial import cKDTree
 
+import sys
+import os
+
+# Add the parent directory to the path so we can import from the main project
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from disc_gflownet.utils.setting import set_seed, set_device, tf
 from disc_gflownet.utils.plotting import plot_loss_curve
 from disc_gflownet.utils.logging import log_arguments, log_training_loop, track_trajectories
@@ -31,6 +37,7 @@ from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 from graph.graph import plot_network_motifs_and_somites
 from graph.dim_reduction import generate_visualizations
+from analysis.diversity_selection import select_diverse_modes
 
 
 # Parse command line arguments
@@ -40,6 +47,10 @@ parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of traj
 parser.add_argument('--reward_threshold', type=float, default=0.1, help='Reward threshold for mode counting')
 parser.add_argument('--top_k', type=int, default=10, help='Number of top states to track')
 parser.add_argument('--top_m', type=int, default=24, help='Number of top states to plot') 
+parser.add_argument('--diversity_metric', type=str, default='combined', 
+                   choices=['structure', 'parameters', 'rewards', 'topology', 'combined'],
+                   help='Diversity metric to use for selecting diverse modes')
+parser.add_argument('--n_diverse', type=int, default=24, help='Number of diverse modes to plot')
 args = parser.parse_args()
 
 # Load checkpoint
@@ -67,7 +78,7 @@ print(f"- Shape of rewards: {np.array(trajectories[0]['rewards']).shape}")
 
 
 
-"""Plot and save loss curve"""
+"""PLOT: Plot and save loss curve"""
 title = f"Loss and Z for the Model"
 plot_loss_curve(losses, zs=zs, title=title, save_dir=os.path.dirname(checkpoint_path))
 print("The final Z (partition function) estimate is {:.2f}".format(zs[-1]))
@@ -77,7 +88,7 @@ print("The final Z (partition function) estimate is {:.2f}".format(zs[-1]))
 
 
 
-"""Mode counting and top rewards tracking - Simple Version with Reward Threshold"""
+"""PLOT: Mode counting and top rewards tracking (--reward_threshold) """
 start_time = time.time()
 
 # Convert trajectories to numpy arrays for faster processing
@@ -181,9 +192,8 @@ plt.close()
 
 
 
-"""Save modes information to file and Plot top_m"""
-""" file output_path = analysis_results.txt """
-
+"""PLOT: Save modes information to file and Plot top_m (--top_m)"""
+# file output_path = analysis_results.txt 
 output_path = os.path.join(os.path.dirname(checkpoint_path), "analysis_results.txt")
 top_m = sorted(
     [(mode, info['reward']) for mode, info in modes_dict.items()],
@@ -226,52 +236,77 @@ print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
 
 
 
+"""PLOT: Plot diverse modes (--diversity_metric --n_diverse)"""
+diverse_states = select_diverse_modes(modes_dict, n_diverse=args.n_diverse, diversity_metric=args.diversity_metric)
+diverse_plot_path = os.path.join(os.path.dirname(checkpoint_path), f"diverse_modes_{args.diversity_metric}_motifs_and_somites.png")
+plot_network_motifs_and_somites(diverse_states, save_path=diverse_plot_path)
+print(f"Diverse modes ({args.diversity_metric} metric) motifs and somite patterns saved to: {diverse_plot_path}")
 
-
-
-"""Save top performing final states and their trajectories to file"""
-TOP_N = 20  
-TOP_REWARD_THRESHOLD = 8  
-TOP_TRAJECTORIES = 11
-
+# Add diverse modes information to the output file
 with open(output_path, 'a') as f:
-    """By avg average trajectory rewards"""
     f.write("-" * 30 + "\n")
-    f.write(f"Top {TOP_N} Final States by Avg Average Trajectory Rewards:\n") 
+    f.write(f"Diverse Modes ({args.diversity_metric.capitalize()} Diversity Metric):\n")
     f.write("-" * 30 + "\n")
+    for i, state in enumerate(diverse_states, 1):
+        state_tuple = tuple(state)
+        if state_tuple in modes_dict:
+            info = modes_dict[state_tuple]
+            f.write(f"Diverse Mode {i}:\n")
+            f.write(f"- State: {state}\n")
+            f.write(f"- Reward: {info['reward']:.3f}\n")
+            f.write(f"- Discovered at step: {info['step']}\n")
+        f.write("\n")
 
-    # Calculate avg average trajectory rewards for each final state (but in somite, we are likely to only have one traj)
-    final_state_avg_rewards = {}
-    for final_state, trajectories in ep_last_state_trajectories.items():
-        traj_avgs = []
-        for traj in trajectories:
-            rewards = [r[0] for r in traj['rewards']]
-            traj_avgs.append(sum(rewards) / len(rewards))
-        final_state_avg_rewards[final_state] = sum(traj_avgs) / len(traj_avgs)
 
-    top_reward_final_states = sorted(
-        final_state_avg_rewards.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )[:TOP_N]
 
-    for final_state, avg_reward in top_reward_final_states:
-        trajectories = ep_last_state_trajectories[final_state]
-        terminal_reward = trajectories[0]['rewards'][-1][0]
-        count = ep_last_state_counts[final_state]
+
+
+
+
+
+# """Save top performing final states and their trajectories to file"""
+# TOP_N = 20  
+# TOP_REWARD_THRESHOLD = 8  
+# TOP_TRAJECTORIES = 11
+
+# with open(output_path, 'a') as f:
+#     """By avg average trajectory rewards"""
+#     f.write("-" * 30 + "\n")
+#     f.write(f"Top {TOP_N} Final States by Avg Average Trajectory Rewards:\n") 
+#     f.write("-" * 30 + "\n")
+
+#     # Calculate avg average trajectory rewards for each final state (but in somite, we are likely to only have one traj)
+#     final_state_avg_rewards = {}
+#     for final_state, trajectories in ep_last_state_trajectories.items():
+#         traj_avgs = []
+#         for traj in trajectories:
+#             rewards = [r[0] for r in traj['rewards']]
+#             traj_avgs.append(sum(rewards) / len(rewards))
+#         final_state_avg_rewards[final_state] = sum(traj_avgs) / len(traj_avgs)
+
+#     top_reward_final_states = sorted(
+#         final_state_avg_rewards.items(),
+#         key=lambda x: x[1],
+#         reverse=True
+#     )[:TOP_N]
+
+#     for final_state, avg_reward in top_reward_final_states:
+#         trajectories = ep_last_state_trajectories[final_state]
+#         terminal_reward = trajectories[0]['rewards'][-1][0]
+#         count = ep_last_state_counts[final_state]
         
-        f.write(f"Final State: {final_state}, Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
+#         f.write(f"Final State: {final_state}, Count: {count}, Terminal Reward: {terminal_reward:.3f}, Avg Average Trajectory Reward: {avg_reward:.3f}\n")
         
-        # Write each trajectory and its average reward
-        for traj in trajectories:
-            rewards = [r[0] for r in traj['rewards']]
-            states = traj['states']
-            traj_avg = sum(rewards) / len(rewards)
-            f.write("Trajectory state-reward pairs:\n")
-            for i, (state, reward) in enumerate(zip(states, rewards)):
-                reward_str = f'${reward:.3f}' if reward > TOP_REWARD_THRESHOLD else f'{reward:.3f}'
-                f.write(f"  Step {i}: State={state}, Reward={reward_str}\n")
-            f.write(f"Average: {traj_avg:.3f}\n\n")
+#         # Write each trajectory and its average reward
+#         for traj in trajectories:
+#             rewards = [r[0] for r in traj['rewards']]
+#             states = traj['states']
+#             traj_avg = sum(rewards) / len(rewards)
+#             f.write("Trajectory state-reward pairs:\n")
+#             for i, (state, reward) in enumerate(zip(states, rewards)):
+#                 reward_str = f'${reward:.3f}' if reward > TOP_REWARD_THRESHOLD else f'{reward:.3f}'
+#                 f.write(f"  Step {i}: State={state}, Reward={reward_str}\n")
+#             f.write(f"Average: {traj_avg:.3f}\n\n")
 
     # """By final state's visit count"""
     # f.write("\n" + "-" * 30 + "\n")
@@ -434,6 +469,8 @@ with open(output_path, 'a') as f:
 #     print(f"Saved animation to: {output_video}")
 
 # print("All animations completed!")
+
+
 
 
 
