@@ -43,14 +43,20 @@ from analysis.diversity_selection import select_diverse_modes
 # Parse command line arguments
 parser = ArgumentParser()
 parser.add_argument('--run_dir', type=str, required=True, help='Directory containing checkpoint file')
-parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of trajectory to animate')
+# parser.add_argument('--trajectory_idx', type=int, default=0, help='Index of trajectory to animate')
 parser.add_argument('--reward_threshold', type=float, default=0.1, help='Reward threshold for mode counting')
 parser.add_argument('--top_k', type=int, default=10, help='Number of top states to track')
 parser.add_argument('--top_m', type=int, default=24, help='Number of top states to plot') 
 parser.add_argument('--diversity_metric', type=str, default='combined', 
-                   choices=['structure', 'parameters', 'rewards', 'topology', 'combined'],
-                   help='Diversity metric to use for selecting diverse modes')
+                    choices=['structure', 'parameters', 'rewards', 'topology', 'combined'], 
+                    help='Diversity metric to use for selecting diverse modes')
 parser.add_argument('--n_diverse', type=int, default=24, help='Number of diverse modes to plot')
+parser.add_argument('--reward_range', type=float, nargs=2, default=None, 
+                    metavar=('MIN', 'MAX'), help='Reward range [min, max] to plot modes for (e.g., 20 30)')
+parser.add_argument('--skip_mode_discovery', action='store_true', 
+                    help='Skip mode discovery and use cached results (for faster reward range analysis)')
+parser.add_argument('--skip_plots', action='store_true', 
+                    help='Skip expensive plotting operations (for faster analysis)')
 args = parser.parse_args()
 
 # Load checkpoint
@@ -89,102 +95,122 @@ print("The final Z (partition function) estimate is {:.2f}".format(zs[-1]))
 
 
 """PLOT: Mode counting and top rewards tracking (--reward_threshold) """
-start_time = time.time()
+# Check if we can load cached results
+modes_save_path = os.path.join(os.path.dirname(checkpoint_path), "modes_with_trajectories.pkl")
+# cached_results_path = os.path.join(os.path.dirname(checkpoint_path), "cached_analysis_results.pkl")
 
-# Convert trajectories to numpy arrays for faster processing
-sorted_trajectories = [(traj['training_step'], last_state, traj) 
-                      for last_state, trajectories in ep_last_state_trajectories.items()
-                      for traj in trajectories]
-sorted_trajectories.sort(key=lambda x: x[0])
-print("\nFirst 10 sorted trajectories:")
-for i, (step, last_state, traj) in enumerate(sorted_trajectories[:10]):
-    print(f"{i}. Step: {step}, Last state: {last_state}")
+if args.skip_mode_discovery and os.path.exists(modes_save_path):
+    print("Loading cached mode discovery results...")
+    with open(modes_save_path, 'rb') as f:
+        modes_dict = pickle.load(f)
+    print(f"Loaded {len(modes_dict)} cached modes")
+    
+    # Reconstruct mode_list and top_modes_avg_rewards from cached data
+    mode_list = list(modes_dict.keys())
+    all_rewards = [info['reward'] for info in modes_dict.values()]
+    top_k_rewards = sorted(all_rewards, reverse=True)[:args.top_k]
+    top_modes_avg_rewards = []
+    for i in range(len(mode_list)):
+        current_top_k = sorted(all_rewards[:i+1], reverse=True)[:args.top_k]
+        top_modes_avg_rewards.append(sum(current_top_k) / len(current_top_k))
+    
+else:
+    start_time = time.time()
 
-modes_dict = {}  # Dictionary to store modes and their info
-modes_set = set()  # Set for faster membership testing
-mode_list = []   # List to maintain order of discovery
-top_modes_avg_rewards = []
-top_k_rewards = []  # Min-heap to store top-k rewards
+    # Convert trajectories to numpy arrays for faster processing
+    sorted_trajectories = [(traj['training_step'], last_state, traj) 
+                          for last_state, trajectories in ep_last_state_trajectories.items()
+                          for traj in trajectories]
+    sorted_trajectories.sort(key=lambda x: x[0])
+    print("\nFirst 10 sorted trajectories:")
+    for i, (step, last_state, traj) in enumerate(sorted_trajectories[:10]):
+        print(f"{i}. Step: {step}, Last state: {last_state}")
 
-BATCH_SIZE = 512  # Process trajectories in batches for efficiency
-for i in range(0, len(sorted_trajectories), BATCH_SIZE):
-    batch = sorted_trajectories[i:i + BATCH_SIZE]
-    
-    # Vectorized processing of batch
-    batch_rewards = np.array([np.array([r[0] for r in traj[2]['rewards']]) for traj in batch])
-    batch_states = np.array([np.array(traj[2]['states']) for traj in batch])
-    batch_steps = np.array([traj[0] for traj in batch])
-    
-    # Filter states by reward threshold using vectorized operations
-    mask = batch_rewards > args.reward_threshold
-    
-    for b_idx in range(len(batch)):
-        high_reward_states = batch_states[b_idx][mask[b_idx]]
-        high_rewards = batch_rewards[b_idx][mask[b_idx]]
-        training_step = batch_steps[b_idx]
+    modes_dict = {}  # Dictionary to store modes and their info
+    modes_set = set()  # Set for faster membership testing
+    mode_list = []   # List to maintain order of discovery
+    top_modes_avg_rewards = []
+    top_k_rewards = []  # Min-heap to store top-k rewards
+
+    BATCH_SIZE = 512  # Process trajectories in batches for efficiency
+    for i in range(0, len(sorted_trajectories), BATCH_SIZE):
+        batch = sorted_trajectories[i:i + BATCH_SIZE]
         
-        if len(high_reward_states) == 0:
-            continue
+        # Vectorized processing of batch
+        batch_rewards = np.array([np.array([r[0] for r in traj[2]['rewards']]) for traj in batch])
+        batch_states = np.array([np.array(traj[2]['states']) for traj in batch])
+        batch_steps = np.array([traj[0] for traj in batch])
+        
+        # Filter states by reward threshold using vectorized operations
+        mask = batch_rewards > args.reward_threshold
+        
+        for b_idx in range(len(batch)):
+            high_reward_states = batch_states[b_idx][mask[b_idx]]
+            high_rewards = batch_rewards[b_idx][mask[b_idx]]
+            training_step = batch_steps[b_idx]
             
-        # Process high reward states
-        for state, reward in zip(high_reward_states, high_rewards):
-            state_tuple = tuple(state)
-            
-            if state_tuple in modes_set:
+            if len(high_reward_states) == 0:
                 continue
                 
-            modes_set.add(state_tuple)
-            # Store full trajectory info for this mode
-            trajectory = batch[b_idx][2]
-            modes_dict[state_tuple] = {
-                'reward': reward,
-                'step': training_step,
-                'states': trajectory['states'],
-                'rewards': [r[0] for r in trajectory['rewards']]
-            }
-            mode_list.append(state_tuple)
-            
-            # Efficient rolling top-k update using min-heap
-            if len(top_k_rewards) < args.top_k:
-                heapq.heappush(top_k_rewards, reward)
-            elif reward > top_k_rewards[0]:
-                heapq.heapreplace(top_k_rewards, reward)
+            # Process high reward states
+            for state, reward in zip(high_reward_states, high_rewards):
+                state_tuple = tuple(state)
                 
-            # top_modes_avg_rewards.append(np.mean(top_k_rewards))
-            top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
+                if state_tuple in modes_set:
+                    continue
+                    
+                modes_set.add(state_tuple)
+                # Store full trajectory info for this mode
+                trajectory = batch[b_idx][2]
+                modes_dict[state_tuple] = {
+                    'reward': reward,
+                    'step': training_step,
+                    'states': trajectory['states'],
+                    'rewards': [r[0] for r in trajectory['rewards']]
+                }
+                mode_list.append(state_tuple)
+                
+                # Efficient rolling top-k update using min-heap
+                if len(top_k_rewards) < args.top_k:
+                    heapq.heappush(top_k_rewards, reward)
+                elif reward > top_k_rewards[0]:
+                    heapq.heapreplace(top_k_rewards, reward)
+                    
+                # top_modes_avg_rewards.append(np.mean(top_k_rewards))
+                top_modes_avg_rewards.append(sum(top_k_rewards) / args.top_k)
 
-end_time = time.time()
-print(f"\nMode counting took {end_time - start_time:.2f} seconds")
-print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}\n\n")
+    end_time = time.time()
+    print(f"\nMode counting took {end_time - start_time:.2f} seconds")
+    print(f"Found {len(modes_dict)} distinct modes with reward threshold {args.reward_threshold}\n\n")
 
-# Save all modes and their trajectories
-modes_save_path = os.path.join(os.path.dirname(checkpoint_path), "modes_with_trajectories.pkl")
-with open(modes_save_path, 'wb') as f:
-    pickle.dump(modes_dict, f)
-print(f"\nSaved all modes and their trajectories to: {modes_save_path}\n")
+    # Save all modes and their trajectories
+    with open(modes_save_path, 'wb') as f:
+        pickle.dump(modes_dict, f)
+    print(f"\nSaved all modes and their trajectories to: {modes_save_path}\n")
 
 # Plot mode discovery and top-k average rewards
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
+if not args.skip_plots:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
 
-discovery_steps = np.array([modes_dict[m]['step'] for m in mode_list])
+    discovery_steps = np.array([modes_dict[m]['step'] for m in mode_list])
 
-# Mode discovery plot
-ax1.plot(discovery_steps, np.arange(1, len(modes_dict) + 1), '-o')
-ax1.set_xlabel('Training Step')
-ax1.set_ylabel('Number of Modes Found')
-ax1.set_title('Mode Discovery Progress')
-ax1.grid(True)
+    # Mode discovery plot
+    ax1.plot(discovery_steps, np.arange(1, len(modes_dict) + 1), '-o')
+    ax1.set_xlabel('Training Step')
+    ax1.set_ylabel('Number of Modes Found')
+    ax1.set_title('Mode Discovery Progress')
+    ax1.grid(True)
 
-# Top-k average rewards plot
-ax2.plot(discovery_steps, top_modes_avg_rewards, '-o')
-ax2.set_xlabel('Training Step')
-ax2.set_ylabel(f'Average Reward of Top-{args.top_k} Modes')
-ax2.set_title(f'Top-{args.top_k} Modes Average Reward Progress')
-ax2.grid(True)
+    # Top-k average rewards plot
+    ax2.plot(discovery_steps, top_modes_avg_rewards, '-o')
+    ax2.set_xlabel('Training Step')
+    ax2.set_ylabel(f'Average Reward of Top-{args.top_k} Modes')
+    ax2.set_title(f'Top-{args.top_k} Modes Average Reward Progress')
+    ax2.grid(True)
 
-plt.tight_layout()
-plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_and_rewards_discovery.png'))
-plt.close()
+    plt.tight_layout()
+    plt.savefig(os.path.join(os.path.dirname(checkpoint_path), 'mode_and_rewards_discovery.png'))
+    plt.close()
 
 
 
@@ -227,20 +253,24 @@ with open(output_path, 'w') as f:
     f.write("\n")
 
 # Plot network motifs and somite patterns for top modes
-top_m_states = [list(state) for state, _ in top_m]
-motifs_plot_path = os.path.join(os.path.dirname(checkpoint_path), "top_modes_motifs_and_somites.png")
-plot_network_motifs_and_somites(top_m_states, save_path=motifs_plot_path)
-print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
+if not args.skip_plots:
+    top_m_states = [list(state) for state, _ in top_m]
+    motifs_plot_path = os.path.join(os.path.dirname(checkpoint_path), "top_modes_motifs_and_somites.png")
+    plot_network_motifs_and_somites(top_m_states, save_path=motifs_plot_path)
+    print(f"\nNetwork motifs and somite patterns saved to: {motifs_plot_path}")
 
 
 
 
 
 """PLOT: Plot diverse modes (--diversity_metric --n_diverse)"""
-diverse_states = select_diverse_modes(modes_dict, n_diverse=args.n_diverse, diversity_metric=args.diversity_metric)
-diverse_plot_path = os.path.join(os.path.dirname(checkpoint_path), f"diverse_modes_{args.diversity_metric}_motifs_and_somites.png")
-plot_network_motifs_and_somites(diverse_states, save_path=diverse_plot_path)
-print(f"Diverse modes ({args.diversity_metric} metric) motifs and somite patterns saved to: {diverse_plot_path}")
+if not args.skip_plots:
+    diverse_states = select_diverse_modes(modes_dict, n_diverse=args.n_diverse, diversity_metric=args.diversity_metric)
+    diverse_plot_path = os.path.join(os.path.dirname(checkpoint_path), f"diverse_modes_{args.diversity_metric}_motifs_and_somites.png")
+    plot_network_motifs_and_somites(diverse_states, save_path=diverse_plot_path)
+    print(f"Diverse modes ({args.diversity_metric} metric) motifs and somite patterns saved to: {diverse_plot_path}")
+else:
+    diverse_states = select_diverse_modes(modes_dict, n_diverse=args.n_diverse, diversity_metric=args.diversity_metric)
 
 # Add diverse modes information to the output file
 with open(output_path, 'a') as f:
@@ -260,6 +290,104 @@ with open(output_path, 'a') as f:
 
 
 
+
+"""PLOT: Reward distribution (reward vs count)"""
+# Extract all rewards from modes
+all_rewards = [info['reward'] for info in modes_dict.values()]
+
+if not args.skip_plots:
+    # Create histogram of rewards
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
+
+    # Histogram
+    ax1.hist(all_rewards, bins=50, alpha=0.7, edgecolor='black')
+    ax1.set_xlabel('Reward')
+    ax1.set_ylabel('Count')
+    ax1.set_title('Reward Distribution (Histogram)')
+    ax1.grid(True, alpha=0.3)
+
+    # Log-scale histogram for better visualization of tail
+    ax2.hist(all_rewards, bins=50, alpha=0.7, edgecolor='black')
+    ax2.set_yscale('log')
+    ax2.set_xlabel('Reward')
+    ax2.set_ylabel('Count (log scale)')
+    ax2.set_title('Reward Distribution (Log Scale)')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    reward_dist_path = os.path.join(os.path.dirname(checkpoint_path), 'reward_distribution.png')
+    plt.savefig(reward_dist_path)
+    plt.close()
+
+    print(f"Reward distribution plot saved to: {reward_dist_path}")
+
+# Add reward distribution statistics to the output file
+with open(output_path, 'a') as f:
+    f.write("-" * 30 + "\n")
+    f.write(f"Reward Distribution Statistics:\n")
+    f.write("-" * 30 + "\n")
+    f.write(f"Total modes: {len(all_rewards)}\n")
+    f.write(f"Mean reward: {np.mean(all_rewards):.3f}\n")
+    f.write(f"Median reward: {np.median(all_rewards):.3f}\n")
+    f.write(f"Std reward: {np.std(all_rewards):.3f}\n")
+    f.write(f"Min reward: {np.min(all_rewards):.3f}\n")
+    f.write(f"Max reward: {np.max(all_rewards):.3f}\n")
+    f.write(f"25th percentile: {np.percentile(all_rewards, 25):.3f}\n")
+    f.write(f"75th percentile: {np.percentile(all_rewards, 75):.3f}\n")
+    f.write(f"95th percentile: {np.percentile(all_rewards, 95):.3f}\n")
+    f.write(f"99th percentile: {np.percentile(all_rewards, 99):.3f}\n\n")
+
+
+
+
+
+"""PLOT: Modes within specific reward range (--reward_range)"""
+if args.reward_range is not None:
+    min_reward, max_reward = args.reward_range
+    
+    # Filter modes within the specified reward range
+    range_modes = []
+    for state_tuple, info in modes_dict.items():
+        if min_reward <= info['reward'] <= max_reward:
+            range_modes.append(list(state_tuple))
+    
+    if range_modes:
+        print(f"\nFound {len(range_modes)} modes with rewards in range [{min_reward}, {max_reward}]")
+        
+        # Plot network motifs and somite patterns for modes in range
+        # Always plot if reward_range is specified, regardless of skip_plots flag
+        range_plot_path = os.path.join(os.path.dirname(checkpoint_path), f"modes_reward_range_{min_reward}_{max_reward}_motifs_and_somites.png")
+        plot_network_motifs_and_somites(range_modes, save_path=range_plot_path)
+        print(f"Modes in reward range [{min_reward}, {max_reward}] saved to: {range_plot_path}")
+        
+        # Add range modes information to the output file
+        with open(output_path, 'a') as f:
+            f.write("-" * 30 + "\n")
+            f.write(f"Modes in Reward Range [{min_reward}, {max_reward}]:\n")
+            f.write("-" * 30 + "\n")
+            f.write(f"Found {len(range_modes)} modes in this range\n\n")
+            
+            # Sort by reward for better organization
+            range_modes_with_rewards = []
+            for state in range_modes:
+                state_tuple = tuple(state)
+                if state_tuple in modes_dict:
+                    range_modes_with_rewards.append((state, modes_dict[state_tuple]['reward']))
+            
+            range_modes_with_rewards.sort(key=lambda x: x[1], reverse=True)
+            
+            for i, (state, reward) in enumerate(range_modes_with_rewards, 1):
+                f.write(f"Mode {i}:\n")
+                f.write(f"- State: {state}\n")
+                f.write(f"- Reward: {reward:.3f}\n")
+                f.write(f"- Discovered at step: {modes_dict[tuple(state)]['step']}\n\n")
+    else:
+        print(f"\nNo modes found with rewards in range [{min_reward}, {max_reward}]")
+        with open(output_path, 'a') as f:
+            f.write("-" * 30 + "\n")
+            f.write(f"Modes in Reward Range [{min_reward}, {max_reward}]:\n")
+            f.write("-" * 30 + "\n")
+            f.write(f"No modes found in this range\n\n")
 
 
 

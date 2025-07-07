@@ -8,14 +8,15 @@ from .baseenv_config import BaseEnvConfig
 class GridEnv2Config(BaseEnvConfig):
 
     env_type = 'GridEnv2' 
-    actions_per_dim = {'weight': [1, 5, 25, -1, -5, -25], 'diagonal': [1, 5, 25, -1, -5, -25]}
-    # actions_per_dim = {'weight': [5, 25, -5, -25], 'diagonal': [5, 25, -5, -25]}
+    # actions_per_dim = {'weight': [1, 5, 25, -1, -5, -25], 'diagonal': [1, 5, 25, -1, -5, -25]}
+    actions_per_dim = {'weight': [5, 25, -5, -25], 'diagonal': [5, 25, -5, -25]}
     n_workers = 22
     # n_workers = 12
-    # n_train_steps = 200
-    n_train_steps = 51
-    # log_freq = 100 # <= n_train_steps
-    log_freq = 50 # <= n_train_steps
+    n_train_steps = 1000
+    # n_train_steps = 201
+    # n_train_steps = 51
+    log_freq = 500 # <= n_train_steps
+    # log_freq = 50 # <= n_train_steps
     
     
     
