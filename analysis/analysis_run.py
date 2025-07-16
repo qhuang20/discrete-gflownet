@@ -61,7 +61,7 @@ args = parser.parse_args()
 
 # Load checkpoint
 checkpoint_path = f"runs/{args.run_dir}/checkpoint.pt"  # checkpoint_interrupted 
-checkpoint = torch.load(checkpoint_path)
+checkpoint = torch.load(checkpoint_path, weights_only=False)
 losses = checkpoint['losses']
 zs = checkpoint['zs']
 ep_last_state_counts = checkpoint['ep_last_state_counts']
