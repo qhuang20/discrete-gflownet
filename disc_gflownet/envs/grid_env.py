@@ -34,11 +34,29 @@ class GridEnv(BaseEnv):
         self.enable_time = args.enable_time
         self.consistent_signs = args.consistent_signs
         
+        # Validate n_steps constraint for effective exploration
+        self._check_n_steps_constraint()
+        
         # Calculate encoding dimension
         weight_encoding = (self.grid_bound['weight']['max'] - self.grid_bound['weight']['min'] + 1) * n_weight_params
         diag_encoding = (self.grid_bound['diagonal']['max'] - self.grid_bound['diagonal']['min'] + 1) * n_diag_params
         base_encoding_dim = weight_encoding + diag_encoding
         self.encoding_dim = base_encoding_dim + (self.n_steps + 1) if self.enable_time else base_encoding_dim
+    
+    def _check_n_steps_constraint(self):
+        """Check if n_steps is within safe bounds for effective exploration."""
+        # Calculate constraint: n_steps < (max_edges + max_nodes) * (grid_bound / max_action)
+        grid_bound = self.grid_bound['weight']['max']  # Assuming symmetric bounds like -100 to 100
+        max_action = max(abs(a) for a in self.actions_per_dim['weight'])
+        total_params = self.max_edges + self.max_nodes
+        max_safe_steps = int(total_params * (grid_bound / max_action))
+        
+        if self.n_steps >= max_safe_steps:
+            print(f"\n⚠️  WARNING: n_steps ({self.n_steps}) may be too large for effective exploration!")
+            print(f"   Recommended: n_steps < {max_safe_steps}")
+            print(f"   Constraint: (max_edges + max_nodes) × (grid_bound ÷ max_action)")
+            print(f"   Current: ({self.max_edges} + {self.max_nodes}) × ({grid_bound} ÷ {max_action}) = {max_safe_steps}")
+            print(f"   Reason: Large n_steps → agent hits bounds frequently → limited exploration\n")
     
     def print_actions(self):
         print("-"*42)

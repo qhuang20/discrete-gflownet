@@ -33,12 +33,14 @@ class BaseEnvConfig:
     consistent_signs = True
     
     # Grid bounds (shared across environments)
+    # NOTE: grid_bound = max value (assuming symmetric bounds). Affects n_steps constraint in GridEnv.
     grid_bound = {
-        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters
-        'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors
+        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters (grid_bound = 100)
+        'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors (grid_bound = 100)
     }
     
     # Actions per dimension (shared across environments)
+    # NOTE: Larger action values allow more steps within the constraint
     actions_per_dim = {
         'weight': [5, 25, -5, -25],   # For the 9 weight parameters
         'diagonal': [5, 25, -5, -25], # For the 3 diagonal factors
