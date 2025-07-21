@@ -12,7 +12,7 @@ import os
 # Add the parent directory to the path so we can import from the main project
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from analysis.diversity_selection import select_diverse_modes, analyze_diversity_metrics, print_diversity_comparison
+from analysis.helper_diversity_selection import select_diverse_modes, analyze_diversity_metrics, print_diversity_comparison
 from graph.graph import plot_network_motifs_and_somites
 
 def create_test_modes():

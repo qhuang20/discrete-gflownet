@@ -45,17 +45,17 @@ class GridEnv(BaseEnv):
     
     def _check_n_steps_constraint(self):
         """Check if n_steps is within safe bounds for effective exploration."""
-        # Calculate constraint: n_steps < (max_edges + max_nodes) * (grid_bound / max_action)
-        grid_bound = self.grid_bound['weight']['max']  # Assuming symmetric bounds like -100 to 100
+        # Calculate constraint: n_steps < (max_edges + max_nodes) * (grid_bound_max / max_action)
+        grid_bound_max = self.grid_bound['weight']['max']  # Assuming symmetric bounds like -100 to 100
         max_action = max(abs(a) for a in self.actions_per_dim['weight'])
         total_params = self.max_edges + self.max_nodes
-        max_safe_steps = int(total_params * (grid_bound / max_action))
+        max_safe_steps = int(total_params * (grid_bound_max / max_action))
         
         if self.n_steps >= max_safe_steps:
             print(f"\n⚠️  WARNING: n_steps ({self.n_steps}) may be too large for effective exploration!")
             print(f"   Recommended: n_steps < {max_safe_steps}")
-            print(f"   Constraint: (max_edges + max_nodes) × (grid_bound ÷ max_action)")
-            print(f"   Current: ({self.max_edges} + {self.max_nodes}) × ({grid_bound} ÷ {max_action}) = {max_safe_steps}")
+            print(f"   Constraint: (max_edges + max_nodes) × (grid_bound_max ÷ max_action)")
+            print(f"   Current: ({self.max_edges} + {self.max_nodes}) × ({grid_bound_max} ÷ {max_action}) = {max_safe_steps}")
             print(f"   Reason: Large n_steps → agent hits bounds frequently → limited exploration\n")
     
     def print_actions(self):

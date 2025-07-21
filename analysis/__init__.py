@@ -6,7 +6,7 @@ from GFlowNet training, including diverse mode selection functionality and
 matrix simplification using SVD.
 """
 
-from .diversity_selection import (
+from .helper_diversity_selection import (
     select_diverse_modes,
     select_by_structure_diversity,
     select_by_parameter_diversity,

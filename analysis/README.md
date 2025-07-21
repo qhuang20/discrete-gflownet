@@ -12,7 +12,7 @@ This folder contains analysis tools for GFlowNet mode discovery and visualizatio
   - Supports diverse mode selection
 
 ### Diversity Selection
-- **`diversity_selection.py`** - Module for selecting diverse modes
+- **`helper_diversity_selection.py`** - Module for selecting diverse modes
   - Multiple diversity metrics (structure, parameters, rewards, topology, combined)
   - Analysis and comparison functions
   - Reusable across different analysis scripts
@@ -40,7 +40,7 @@ python analysis/test_diverse_modes.py
 
 ### Importing in Other Scripts
 ```python
-from analysis.diversity_selection import select_diverse_modes
+from analysis.helper_diversity_selection import select_diverse_modes
 from analysis import select_diverse_modes  # Alternative import
 ```
 

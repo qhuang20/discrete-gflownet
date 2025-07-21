@@ -28,7 +28,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from reward_func.evo_devo import weights_to_matrix, somitogenesis_reward_func, somitogenesis_sol_func
-from graph.graph import draw_network_motif
+from graph.graph import draw_network_motif, plot_network_motifs_and_somites
 
 
 def matrix_to_weights(W_matrix: np.ndarray) -> List[int]:
@@ -72,6 +72,7 @@ def apply_svd_simplification(W_original: np.ndarray, rank: int = 2, threshold: f
     Apply SVD simplification with given rank and threshold.
     """
     U, s, Vt = svd(W_original)
+    print(s)
     
     # Low-rank approximation
     W_approx = U[:, :rank] @ np.diag(s[:rank]) @ Vt[:rank, :]
@@ -172,7 +173,7 @@ def simplify_test_state(test_state: List[float], rank: int = 2, threshold: float
 
 
 
-def find_optimal_simplification(test_state: List[float], max_reward_diff: float = 5.0, 
+def find_optimal_simplification(test_state: List[float], max_reward_diff: float = 9.0, 
                                verbose: bool = True, plot: bool = False,
                                save_path: Optional[str] = None) -> Tuple[Optional[List[float]], Optional[Dict], List[Dict]]:
     """
@@ -193,7 +194,7 @@ def find_optimal_simplification(test_state: List[float], max_reward_diff: float 
     W_original = weights_to_matrix(weights).astype(float)
     
     ranks = list(range(1, n_nodes + 1))  # Test all possible ranks from 1 to n_nodes
-    thresholds = [0.0, 0.1, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0]  # Include 0.0 for baseline (no thresholding)
+    thresholds = [0.0, 6.0, 12.0, 15.0, 21.0, 24.0, 27.0, 30.0, 33.0]  # Include 0.0 for baseline (no thresholding)
     
     results = []
     
@@ -244,7 +245,7 @@ def find_optimal_simplification(test_state: List[float], max_reward_diff: float 
                     print(f"{rank:<4} {threshold:<6.1f} ERROR: {str(e)[:20]}")
     
     # Find best result - prioritize reward preservation
-    valid_results = [r for r in results if r['score'] > 0]
+    valid_results = [r for r in results if r['score'] > -5] # assume all valid
     if not valid_results:
         if verbose:
             print(f"No valid simplifications found within reward difference limit of {max_reward_diff}!")
@@ -252,53 +253,52 @@ def find_optimal_simplification(test_state: List[float], max_reward_diff: float 
     
     best_result = max(valid_results, key=lambda x: x['score'])
     
-    # Create visualization if requested
+
+    
     if plot and valid_results:
-        fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+        # Filter for states to plot based on the specified criteria
+        plottable_results = [
+            r for r in valid_results 
+            if r['metrics']['reward_difference'] is not None 
+            and r['metrics']['simplified_sparsity'] >= 0.10 
+            and r['metrics']['reward_difference'] <= max_reward_diff
+        ]
+
+        # Plot original + all filtered simplified states (original first)
+        states_to_plot = [test_state] + [r['simplified_state'] for r in plottable_results]
         
-        # Get best simplified state
-        best_simplified = best_result['simplified_state']
+        # Create titles for each plot
+        additional_titles = ["Original State"]
+        for r in plottable_results:
+            sp = r['metrics']['simplified_sparsity']
+            rd = r['metrics']['reward_difference']
+            title = f"Rank {r['rank']}, Thr {r['threshold']:.1f}, Sparsity {sp:.1%}, RewDiff {rd:.2f}"
+            additional_titles.append(title)
         
-        # Original somite pattern (top left)
-        reward_orig = somitogenesis_reward_func(test_state, plot=True, ax=axes[0, 0])
-        axes[0, 0].set_title(f'Original Somite Pattern\nReward: {reward_orig:.3f}')
-        
-        # Simplified somite pattern (top right)
-        reward_simp = somitogenesis_reward_func(best_simplified, plot=True, ax=axes[0, 1])
-        reward_diff = abs(reward_orig - reward_simp) if reward_simp is not None else None
-        reward_diff_str = f", Diff: {reward_diff:.3f}" if reward_diff is not None else ""
-        axes[0, 1].set_title(f'Simplified Somite Pattern (Rank {best_result["rank"]}, Thresh {best_result["threshold"]})\n'
-                            f'Reward: {reward_simp:.3f}{reward_diff_str}')
-        
-        # Original network motif (bottom left)
-        draw_network_motif(test_state, ax=axes[1, 0])
-        axes[1, 0].set_title(f'Original Network Motif ({n_nodes} nodes)')
-        
-        # Simplified network motif (bottom right)
-        draw_network_motif(best_simplified, ax=axes[1, 1])
-        sparsity = best_result['metrics']['simplified_sparsity']
-        axes[1, 1].set_title(f'Simplified Network Motif\nSparsity: {sparsity:.1%}')
-        
-        plt.tight_layout()
-        
-        # Save plot (auto-generate filename if needed)
-        if save_path:
-            filename = save_path
-        else:
-            # Create the images folder if it doesn't exist
+        # Determine save path for the grid plot
+        grid_save_path = save_path
+        if not grid_save_path:
             images_folder = "matrix_simplification_images"
             os.makedirs(images_folder, exist_ok=True)
-            
-            # Create state identifier from first few elements and length
             state_id = f"{len(test_state)}elem_{abs(hash(tuple(test_state))) % 100000:05d}"
-            filename = os.path.join(images_folder, f"matrix_simplification_{state_id}_rank{best_result['rank']}_thresh{best_result['threshold']}.png")
-        
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
+            grid_save_path = os.path.join(images_folder, f"simplification_grid_{state_id}.png")
+
+        filename = plot_network_motifs_and_somites(states_to_plot, grid_save_path, additional_titles=additional_titles)
         if verbose:
-            print(f"Saved simplification plot to: {filename}")
-        plt.show()
+            print(f"Saved simplification plots to: {filename}")
     
     if verbose:
+        print(f"\nOriginal test_state ({n_nodes}-node): {test_state}")
+        
+        # List all simplifications with >=10% sparsity and reward difference <= max_reward_diff
+        print(f"\nAll simplifications with >=10% sparsity and reward difference <= {max_reward_diff}:")
+        for r in results:
+            sp = r['metrics']['simplified_sparsity']
+            rd = r['metrics']['reward_difference']
+            if rd is not None and sp >= 0.10 and rd <= max_reward_diff:
+                print(f"  Rank {r['rank']}, Thresh {r['threshold']}: Sparsity {sp:.1%}, Reward diff {rd:.3f}")
+                # print(f"    Simplified state: {r['simplified_state']}")
+        
         print(f"\nBest option (prioritizing reward preservation):")
         print(f"  Rank {best_result['rank']}, Threshold {best_result['threshold']}")
         print(f"  Sparsity: {best_result['metrics']['simplified_sparsity']:.1%}")
@@ -306,7 +306,6 @@ def find_optimal_simplification(test_state: List[float], max_reward_diff: float 
             print(f"  Reward difference: {best_result['metrics']['reward_difference']:.3f}")
         print(f"  Reconstruction error: {best_result['metrics']['reconstruction_error']:.2f}")
         print(f"  Score: {best_result['score']:.3f}")
-    
     return best_result['simplified_state'], best_result, results
 
 
@@ -437,7 +436,7 @@ if __name__ == "__main__":
     
     # Find optimal simplification with comprehensive visualization
     optimal_state, optimal_params, _ = find_optimal_simplification(
-        example_state, max_reward_diff=5.0, verbose=True, plot=True
+        example_state, max_reward_diff=9.0, verbose=True, plot=True
     )
     
     if optimal_state:

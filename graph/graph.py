@@ -176,13 +176,14 @@ def draw_network_motif(state, ax=None, node_size=500, max_edge_weight=200):
     return G
 
 
-def plot_network_motifs_and_somites(test_states_list, save_path=None):
+def plot_network_motifs_and_somites(test_states_list, save_path=None, additional_titles=None):
     """
     Plot network motifs and their corresponding somite patterns in a grid layout.
     
     Args:
-        test_states_list (list): List of state configurations (weights + d_values + s_values) to visualize
+        test_states_list (list): List of state configurations to visualize
         save_path (str, optional): Path to save the figure. If None, timestamp will be used
+        additional_titles (list of str, optional): List of additional titles to prepend for each subplot.
     """
     # Grid layout parameters
     node_size = 550
@@ -212,22 +213,29 @@ def plot_network_motifs_and_somites(test_states_list, save_path=None):
         # Create title showing the state values
         weights, d_values, _, n_nodes, _ = extract_network_parameters(state)
         weight_matrix = weights_to_matrix(weights)
-        title = f"Motif {idx+1}\n"
         
+        # Default title is the matrix form
+        title = ""
         # Add weights in matrix form
         for i in range(n_nodes):
-            row_str = "  ".join([f"{weight_matrix[i,j]:<6d}" for j in range(n_nodes)])
+            row_str = "  ".join([f"{weight_matrix[i,j]:<6.1f}" for j in range(n_nodes)])
             title += f"{row_str}\n"
         
         # Add d_values
-        d_str = ", ".join([f"{d:<6d}" for d in d_values])
+        d_str = ", ".join([f"{d:<6.1f}" for d in d_values])
         title += f"d_values: [{d_str}]"
-        
+
+        # Prepend additional title if available
+        if additional_titles and idx < len(additional_titles):
+            title = f"{additional_titles[idx]}\n{title}"
+        else:
+            title = f"Motif {idx+1}\n" + title
+
         axs[row, col].set_title(title, fontsize=6)
         
         # Draw the somite pattern below the motif
         reward = somitogenesis_reward_func(state, plot=True, ax=axs[row+1, col])
-        axs[row+1, col].set_title(f"Somite Pattern (reward: {reward})", fontsize=10)
+        axs[row+1, col].set_title(f"Somite Pattern (reward: {reward:.3f})", fontsize=10)
 
     # Remove axes for empty subplots
     total_plots = len(test_states_list)

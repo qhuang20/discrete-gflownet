@@ -31,19 +31,14 @@ class BaseEnvConfig:
     min_reward = 1e-3
     enable_time = False
     consistent_signs = True
-    
-    # Grid bounds (shared across environments)
-    # NOTE: grid_bound = max value (assuming symmetric bounds). Affects n_steps constraint in GridEnv.
     grid_bound = {
-        'weight': {'min': -100, 'max': 100},     # For the 9 weight parameters (grid_bound = 100)
-        'diagonal': {'min': -100, 'max': 100},    # For the 3 diagonal factors (grid_bound = 100)
+        'weight': {'min': -100, 'max': 100},     # For the n_nodes by n_nodes weight parameters
+        'diagonal': {'min': -100, 'max': 100},   # For the n_nodes diagonal factors
     }
-    
-    # Actions per dimension (shared across environments)
-    # NOTE: Larger action values allow more steps within the constraint
+    # NOTE: Larger action values reduce n_steps per dim within the grid_bound 
     actions_per_dim = {
-        'weight': [5, 25, -5, -25],   # For the 9 weight parameters
-        'diagonal': [5, 25, -5, -25], # For the 3 diagonal factors
+        'weight': [5, 25, -5, -25], 
+        'diagonal': [5, 25, -5, -25], 
     }
     
     # Default environment parameters (to be overridden by specific configs)

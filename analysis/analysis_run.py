@@ -37,7 +37,7 @@ from scipy.integrate import solve_ivp
 from reward_func.evo_devo import coord_reward_func, oscillator_reward_func, somitogenesis_reward_func
 from graph.graph import plot_network_motifs_and_somites
 from graph.dim_reduction import generate_visualizations
-from analysis.diversity_selection import select_diverse_modes
+from analysis.helper_diversity_selection import select_diverse_modes
 
 
 # Parse command line arguments
