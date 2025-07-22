@@ -22,6 +22,7 @@ from disc_gflownet.agents.tbflownet_agent import TBFlowNetAgent
 from disc_gflownet.agents.dbflownet_agent import DBFlowNetAgent
 from disc_gflownet.envs.grid_env import GridEnv
 from disc_gflownet.envs.grid_env2 import GridEnv2
+from disc_gflownet.envs.grid_env_local import GridEnvLocal
 
 
 def compute_reward(curr_ns, env, reward_func):
@@ -88,7 +89,14 @@ class GFlowNetTrainer:
         
     def _setup_environments(self):
         """Create environment instances"""
-        env_class = GridEnv if self.config.env_type == 'GridEnv' else GridEnv2
+        if self.config.env_type == 'GridEnv':
+            env_class = GridEnv
+        elif self.config.env_type == 'GridEnv2':
+            env_class = GridEnv2
+        elif self.config.env_type == 'GridEnvLocal':
+            env_class = GridEnvLocal
+        else:
+            raise ValueError(f"Unknown environment type: {self.config.env_type}")
         self.envs = [env_class(self.config) for _ in range(self.config.envsize)]
         
     def _setup_agent(self):

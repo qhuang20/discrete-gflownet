@@ -12,6 +12,7 @@ Users can modify config files directly for custom parameters.
 from .baseenv_config import BaseEnvConfig
 from .gridenv_config import GridEnvConfig
 from .gridenv2_config import GridEnv2Config
+from .gridenv_local_config import GridEnvLocalConfig
 from .reward_configs import get_reward_function, REWARD_FUNCTIONS
 
 # Dictionary mapping for easy selection
@@ -19,6 +20,7 @@ ENVS = {
     'base': BaseEnvConfig,
     'gridenv': GridEnvConfig,
     'gridenv2': GridEnv2Config,
+    'gridenv_local': GridEnvLocalConfig,
 }
 
 def get_env(env_name):
