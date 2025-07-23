@@ -265,9 +265,11 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     MAX_SIMTIME = 90
     DELTA_SOMITE = 0.1
     DELTA_STABILITY = 0.02
-    SPARSITY_WEIGHT = 0.8
     STABILITY_POWER = 5
     N_BOUNDARY_CHECKS = 3
+    # SPARSITY_WEIGHT = 0.8
+    # SPARSITY_WEIGHT = 1.0
+    SPARSITY_WEIGHT = 5.0
 
     def count_boundaries(concentrations):
         """Count boundaries with minimum distance between them"""

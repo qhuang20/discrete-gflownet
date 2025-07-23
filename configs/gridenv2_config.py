@@ -8,10 +8,11 @@ class GridEnv2Config(BaseEnvConfig):
 
     seed = 42
     env_type = 'GridEnv2' 
-    actions_per_dim = {'weight': [1, 5, 25, -1, -5, -25], 'diagonal': [1, 5, 25, -1, -5, -25]}
+    # actions_per_dim = {'weight': [1, 5, 25, -1, -5, -25], 'diagonal': [1, 5, 25, -1, -5, -25]}
+    actions_per_dim = {'weight': [0, 5, 25, -0, -5, -25], 'diagonal': [0, 5, 25, -0, -5, -25]}
     # actions_per_dim = {'weight': [5, 25, -5, -25], 'diagonal': [5, 25, -5, -25]}
     
-    n_workers = 12
+    n_workers = 8
     n_train_steps = 200
     log_freq = 100 # <= n_train_steps
     
