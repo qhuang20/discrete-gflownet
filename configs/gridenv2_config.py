@@ -8,9 +8,13 @@ class GridEnv2Config(BaseEnvConfig):
 
     seed = 42
     env_type = 'GridEnv2' 
+    grid_bound = {
+        'weight': {'min': -200, 'max': 200},     # For the n_nodes by n_nodes weight parameters
+        'diagonal': {'min': -200, 'max': 200},   # For the n_nodes diagonal factors
+    }
     # actions_per_dim = {'weight': [1, 5, 25, -1, -5, -25], 'diagonal': [1, 5, 25, -1, -5, -25]}
-    actions_per_dim = {'weight': [0, 5, 25, -0, -5, -25], 'diagonal': [0, 5, 25, -0, -5, -25]}
-    # actions_per_dim = {'weight': [5, 25, -5, -25], 'diagonal': [5, 25, -5, -25]}
+    # actions_per_dim = {'weight': [0, 5, 25, -0, -5, -25], 'diagonal': [0, 5, 25, -0, -5, -25]}
+    actions_per_dim = {'weight': [5, 50, -5, -50], 'diagonal': [5, 50, -5, -50]}
     
     n_workers = 8
     n_train_steps = 200

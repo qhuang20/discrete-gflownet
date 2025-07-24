@@ -239,7 +239,7 @@ def _simulate_somitogenesis_system(weights, d_values, s_values, n_nodes):
 
 
 
-def somitogenesis_reward_func(state, plot=False, ax=None):
+def somitogenesis_reward_func(state, plot=False, ax=None, SPARSITY_WEIGHT=0.8):
     """
     Calculate reward based on gene expression pattern simulation.
     
@@ -248,6 +248,7 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
               For n nodes: n^2 weights + n d values + n s values = n^2 + 2n total parameters
         plot: bool, whether to plot the heatmap (default: False)
         ax: matplotlib axes object for plotting in a grid (default: None)
+        SPARSITY_WEIGHT: float, weight for sparsity reward (default: 0.8)
         
     Returns:
         float: Reward value based on pattern formation and stability
@@ -267,9 +268,6 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
     DELTA_STABILITY = 0.02
     STABILITY_POWER = 5
     N_BOUNDARY_CHECKS = 3
-    # SPARSITY_WEIGHT = 0.8
-    # SPARSITY_WEIGHT = 1.0
-    SPARSITY_WEIGHT = 5.0
 
     def count_boundaries(concentrations):
         """Count boundaries with minimum distance between them"""
@@ -346,6 +344,40 @@ def somitogenesis_reward_func(state, plot=False, ax=None):
         plot_heatmap(x1_concentration, t_sim, ax)
     
     return calculate_reward(x1_concentration)
+
+
+def somitogenesis_sparsity_reward_func(state, plot=False, ax=None, min_base_reward=4.0):
+    """
+    Sparsity-focused reward function that only gives reward if base somitogenesis reward is sufficient.
+    Focuses on maximizing the number of zeros in the state vector.
+    
+    Returns:
+        float: Sparsity-based reward if base reward >= min_base_reward, otherwise 0
+    """
+    
+    # First check if the base somitogenesis reward meets the threshold
+    base_reward = somitogenesis_reward_func(state, plot=plot, ax=ax, SPARSITY_WEIGHT=0.0)
+    
+    if base_reward < min_base_reward:
+        return 0.0
+    
+    # Calculate sparsity reward focusing on zeros in the entire state
+    n_zeros = sum(1 for x in state if x == 0)
+    sparsity_ratio = n_zeros / len(state)
+    
+    # Scale sparsity reward to be meaningful (0-10 range, with 10 being all zeros)
+    sparsity_reward = sparsity_ratio * 10.0
+    
+    # Optional: add a bonus if sparsity is very high
+    # if sparsity_ratio > 0.8:  # More than 80% zeros
+    #     sparsity_reward += 2.0
+    
+    if plot:
+        print(f"Base somitogenesis reward: {base_reward}")
+        print(f"Number of zeros: {n_zeros}/{len(state)} ({sparsity_ratio:.3f})")
+        print(f"Sparsity reward: {sparsity_reward:.3f}")
+    
+    return round(sparsity_reward, 3)
 
 
 
