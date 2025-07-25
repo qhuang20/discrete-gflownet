@@ -118,7 +118,8 @@ class GFlowNetTrainer:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = (f"{self.config.method}_h{self.config.n_hid}_l{self.config.n_layers}_"
                    f"mr{self.config.min_reward}_ts{self.config.n_train_steps}_"
-                   f"d{self.config.n_dims}_s{self.config.n_steps}_er{self.config.explore_ratio}")
+                   f"d{self.config.n_dims}_s{self.config.n_steps}_er{self.config.explore_ratio}_"
+                   f"{self.config.reward_func_name}")
         
         self.run_dir = os.path.join('runs', f'{timestamp}_{run_name}')
         os.makedirs(self.run_dir, exist_ok=True)

@@ -11,19 +11,19 @@ class GridEnvLocalConfig(BaseEnvConfig):
     
     # Grid bounds - using larger bounds for local exploration
     grid_bound = {
-        'weight': {'min': -500, 'max': 500},
-        'diagonal': {'min': -500, 'max': 500},
+        'weight': {'min': -1000, 'max': 1000},
+        'diagonal': {'min': -1000, 'max': 1000},
     }
     
     # Actions available based on initial state sign
     actions_per_dim = {
         'weight': {
-            'positive': [50, -5],    # [slot_0, slot_1] for positive initial values
-            'negative': [-50, 5]     # [slot_0, slot_1] for negative initial values
+            'positive': [100, -5],    # [slot_0, slot_1] for positive initial values
+            'negative': [-100, 5]     # [slot_0, slot_1] for negative initial values
         },
         'diagonal': {
-            'positive': [50, -5],    # [slot_0, slot_1] for positive initial values
-            'negative': [-50, 5]     # [slot_0, slot_1] for negative initial values
+            'positive': [100, -5],    # [slot_0, slot_1] for positive initial values
+            'negative': [-100, 5]     # [slot_0, slot_1] for negative initial values
         }
     } 
     
@@ -40,5 +40,5 @@ class GridEnvLocalConfig(BaseEnvConfig):
     
     # Environment parameters
     n_dims = 56        # 7x7 + 7 for 7-node network
-    n_steps = 50      # Number of steps for local exploration
+    n_steps = 150      # Number of steps for local exploration
     

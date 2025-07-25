@@ -28,6 +28,7 @@ Available reward functions:
 - `coord`: Coordinate reward function
 - `oscillator`: Oscillator reward function  
 - `somitogenesis`: Somitogenesis reward function (default)
+- `somitogenesis_sparsity`: Sparsity-focused somitogenesis reward function
 
 ## Usage
 
@@ -39,6 +40,9 @@ python train_with_config.py
 
 # Use specific environment and reward
 python train_with_config.py --env gridenv2 --reward oscillator
+
+# Use the new sparsity-focused reward function
+python train_with_config.py --env gridenv --reward somitogenesis_sparsity
 
 # To change parameters like n_train_steps, device, etc., edit the environment config files directly
 # For example, edit configs/gridenv_config.py to change GridEnv parameters
