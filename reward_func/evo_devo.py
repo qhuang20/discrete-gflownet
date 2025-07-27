@@ -239,7 +239,9 @@ def _simulate_somitogenesis_system(weights, d_values, s_values, n_nodes):
 
 
 
-def somitogenesis_reward_func(state, plot=False, ax=None, SPARSITY_WEIGHT=0.8):
+
+
+def somitogenesis_reward_func(state, plot=False, ax=None, SPARSITY_WEIGHT=0.8, gene_idx=0, plot_all_genes=False):
     """
     Calculate reward based on gene expression pattern simulation.
     
@@ -249,6 +251,8 @@ def somitogenesis_reward_func(state, plot=False, ax=None, SPARSITY_WEIGHT=0.8):
         plot: bool, whether to plot the heatmap (default: False)
         ax: matplotlib axes object for plotting in a grid (default: None)
         SPARSITY_WEIGHT: float, weight for sparsity reward (default: 0.8)
+        gene_idx: int, which gene to plot (0-indexed, default: 0 for x1)
+        plot_all_genes: bool, whether to plot all genes in separate subplots (default: False)
         
     Returns:
         float: Reward value based on pattern formation and stability
@@ -323,40 +327,108 @@ def somitogenesis_reward_func(state, plot=False, ax=None, SPARSITY_WEIGHT=0.8):
         
         return round(total_boundaries * stability_reward * sparsity_factor, 3) 
 
-    def plot_heatmap(x1_concentration, t, ax=None):
-        """Plot heatmap"""
+    def plot_single_gene_heatmap(gene_concentration, gene_idx, t, ax=None):
+        """Plot heatmap for a single gene"""
         if ax is None:
             plt.figure(figsize=(10, 6))
             ax = plt.gca()
             
-        im = ax.imshow(x1_concentration.T, aspect='auto', cmap='Blues',
+        im = ax.imshow(gene_concentration.T, aspect='auto', cmap='Blues',
                       extent=[0, MAX_SIMTIME, 100, 0])
-        plt.colorbar(im, ax=ax, label='x1 Concentration')
+        plt.colorbar(im, ax=ax, label=f'Gene {gene_idx+1} Concentration')
         ax.set_xlabel('Time')
         ax.set_ylabel('Position')
-        ax.set_title('x1 Concentration Across Time and Space')
+        ax.set_title(f'Gene {gene_idx+1} Concentration Across Time and Space')
         
         if ax is None:
+            plt.show()
+    
+    def plot_all_genes_heatmap(all_concentrations, t, ax=None):
+        """Plot heatmaps for all genes"""
+        n_genes = all_concentrations.shape[2]
+        
+        if ax is None:
+            fig, axes = plt.subplots(n_genes, 1, figsize=(10, 6*n_genes))
+            if n_genes == 1:
+                axes = [axes]
+        else:
+            # If ax is provided, we can't create subplots, so just plot all genes overlaid
+            # This is a fallback for when ax is provided externally
+            colors = plt.cm.Set1(np.linspace(0, 1, n_genes))
+            for i in range(n_genes):
+                im = ax.imshow(all_concentrations[:, :, i].T, aspect='auto', 
+                             cmap='Blues', alpha=0.7, extent=[0, MAX_SIMTIME, 100, 0])
+            ax.set_xlabel('Time')
+            ax.set_ylabel('Position')
+            ax.set_title('All Genes Concentration (Overlaid)')
+            return
+            
+        for i in range(n_genes):
+            if ax is None:
+                current_ax = axes[i]
+            else:
+                current_ax = ax
+            
+            im = current_ax.imshow(all_concentrations[:, :, i].T, aspect='auto', 
+                                 cmap='Blues', extent=[0, MAX_SIMTIME, 100, 0])
+            plt.colorbar(im, ax=current_ax, label=f'Gene {i+1} Concentration')
+            current_ax.set_xlabel('Time')
+            current_ax.set_ylabel('Position')
+            current_ax.set_title(f'Gene {i+1} Concentration Across Time and Space')
+        
+        if ax is None:
+            plt.tight_layout()
             plt.show()
 
     # Plot if requested
     if plot:
-        plot_heatmap(x1_concentration, t_sim, ax)
+        if plot_all_genes:
+            plot_all_genes_heatmap(sol, t_sim, ax)
+        else:
+            # Ensure gene_idx is valid
+            n_nodes = _parse_somitogenesis_state(state)[0]
+            if gene_idx >= n_nodes:
+                gene_idx = 0  # Fall back to first gene if invalid index
+            gene_concentration = sol[:, :, gene_idx]
+            plot_single_gene_heatmap(gene_concentration, gene_idx, t_sim, ax)
     
     return calculate_reward(x1_concentration)
 
 
-def somitogenesis_sparsity_reward_func(state, plot=False, ax=None, min_base_reward=4.0):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def somitogenesis_sparsity_reward_func(state, plot=False, ax=None, min_base_reward=4.0, gene_idx=0, plot_all_genes=False):
     """
     Sparsity-focused reward function that only gives reward if base somitogenesis reward is sufficient.
     Focuses on maximizing the number of zeros in the state vector.
+    
+    Args:
+        state: 1D array containing weights and parameters
+        plot: bool, whether to plot heatmap
+        ax: matplotlib axes object for plotting
+        min_base_reward: float, minimum base reward threshold
+        gene_idx: int, which gene to plot (0-indexed)
+        plot_all_genes: bool, whether to plot all genes
     
     Returns:
         float: Sparsity-based reward if base reward >= min_base_reward, otherwise 0
     """
     
     # First check if the base somitogenesis reward meets the threshold
-    base_reward = somitogenesis_reward_func(state, plot=plot, ax=ax, SPARSITY_WEIGHT=0.0)
+    base_reward = somitogenesis_reward_func(state, plot=plot, ax=ax, SPARSITY_WEIGHT=0.0, 
+                                          gene_idx=gene_idx, plot_all_genes=plot_all_genes)
     
     if base_reward < min_base_reward:
         return 0.0
@@ -378,6 +450,7 @@ def somitogenesis_sparsity_reward_func(state, plot=False, ax=None, min_base_rewa
         print(f"Sparsity reward: {sparsity_reward:.3f}")
     
     return round(sparsity_reward, 3)
+
 
 
 
