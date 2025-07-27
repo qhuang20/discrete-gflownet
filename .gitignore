@@ -1,13 +1,4 @@
 
-# My Project 
-data/
-runs/
-output/
-.DS_Store
-nohup.out
-pres/
-
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -143,3 +134,14 @@ dmypy.json
 # Data
 /data/*
 !/data/.gitkeep
+
+
+
+# My Project 
+data/
+runs/
+output/
+.DS_Store
+nohup.out
+pres/
+notebooks/img/
